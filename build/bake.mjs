@@ -44,3 +44,61 @@ export function bakeBilder(dom, slaOpp) {
   }
   return treff;
 }
+
+export function bakeLister(dom, slaOpp) {
+  let treff = 0;
+
+  for (const beholder of dom.querySelectorAll('[data-editable-list]')) {
+    const poster = slaOpp(beholder, beholder.getAttribute('data-editable-list'));
+    if (!Array.isArray(poster) || poster.length === 0) continue;
+
+    const maler = beholder.querySelectorAll('[data-list-item]');
+    if (maler.length === 0) continue;
+
+    // Hver post rendres fra SIN egen mal etter indeks. En liste der kort 2 er
+    // framhevet beholder framhevingen naar kort 1 redigeres. Rendres alt fra
+    // den foerste malen, forsvinner strukturen ved foerste publisering.
+    const malStrenger = Array.from(maler).map((el) => el.toString());
+    maler.forEach((el) => el.remove());
+
+    poster.forEach((post, i) => {
+      const rot = parse(malStrenger[i] || malStrenger[malStrenger.length - 1]);
+      const element = rot.querySelector('[data-list-item]');
+      if (!element) return;
+
+      for (const felt of element.querySelectorAll('[data-list-field]')) {
+        const k = felt.getAttribute('data-list-field');
+        if (post[k] != null) felt.set_content(post[k]);
+      }
+
+      for (const felt of element.querySelectorAll('[data-list-image-field]')) {
+        const k = felt.getAttribute('data-list-image-field');
+        const pos = post[`${k}@pos`];
+        // Bildet i "Les mer"-modalen har sitt eget punkt, fordi utsnittet der er
+        // en annen form enn kortets. Leses tilbake av detail-modal.js.
+        const posModal = post[`${k}@pos-modal`];
+        if (posModal) felt.setAttribute('data-pos-modal', posModal);
+        if (post[k] == null && !pos) continue;
+        if (post[k] != null) {
+          if (felt.tagName === 'IMG') {
+            felt.setAttribute('src', post[k]);
+            if (post.tittel) felt.setAttribute('alt', post.tittel);
+          } else {
+            settStilProp(felt, 'background-image', `url('${post[k]}')`);
+          }
+        }
+        settFokuspunkt(felt, pos);
+      }
+
+      if (post._skjult) {
+        const klasser = (element.getAttribute('class') || '').trim();
+        element.setAttribute('class', `${klasser}${klasser ? ' ' : ''}is-hidden-item`);
+      }
+
+      beholder.appendChild(element);
+      treff++;
+    });
+  }
+
+  return treff;
+}
