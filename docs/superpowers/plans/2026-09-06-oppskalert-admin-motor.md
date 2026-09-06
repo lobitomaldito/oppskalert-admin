@@ -1666,15 +1666,15 @@ test('tankestrek er et varsel, ikke en byggefeil', () => {
   assert.equal(funn.length, 1);
 });
 
-test('manglende .admin-tid er et varsel om at byggetiden aldri ble maalt', () => {
+test('manglende admin-tid.json er et varsel om at byggetiden aldri ble maalt', () => {
   const funn = byggetid.sjekk(p([{ sti: 'templates/a.html', tekst: '<h1>x</h1>' }]));
   assert.equal(byggetid.alvor, 'varsel');
   assert.equal(funn.length, 1);
   assert.match(funn[0].melding, /oppskalert-admin tid/);
 });
 
-test('.admin-tid til stede er greit', () => {
-  assert.deepEqual(byggetid.sjekk(p([{ sti: '.admin-tid', tekst: '48000\n' }])), []);
+test('admin-tid.json til stede er greit', () => {
+  assert.deepEqual(byggetid.sjekk(p([{ sti: 'admin-tid.json', tekst: '{"rebuildMs":48000}' }])), []);
 });
 
 test('«ikke X, men Y» flagges til gjennomlesing', () => {
@@ -1821,9 +1821,12 @@ export default {
 export default {
   navn: 'malt-byggetid',
   alvor: 'varsel',
-  sjekk: (p) => p.filer.some((f) => f.sti === '.admin-tid')
+  // Merkefila heter admin-tid.json og ikke .admin-tid fordi lesProsjekt hopper
+  // over navn som starter med punktum. En maalt verdi som skal vaere
+  // etterprovbar hoerer uansett hjemme som en synlig fil.
+  sjekk: (p) => p.filer.some((f) => f.sti === 'admin-tid.json')
     ? []
-    : [{ fil: '.admin-tid', linje: 0, melding: 'Byggetiden er aldri maalt paa dette prosjektet. Kjoer `oppskalert-admin tid` og sett ADMIN_REBUILD_MS i Vercel.' }]
+    : [{ fil: 'admin-tid.json', linje: 0, melding: 'Byggetiden er aldri maalt paa dette prosjektet. Kjoer `oppskalert-admin tid <ms>` og sett ADMIN_REBUILD_MS i Vercel.' }]
 };
 ```
 
@@ -1895,7 +1898,7 @@ EOF
   - `lesProsjekt(rot) => { rot, filer: [{ sti, tekst }] }` fra `bin/_les-prosjekt.mjs`. Leser `templates/`, `static/`, `content/`. Hopper over `node_modules`, `dist`, `.git`.
   - `oppskalert-admin doctor [sti]` avslutter med kode 1 hvis det finnes feil, 0 ellers. Varsler skrives ut, men endrer ikke koden.
   - `oppskalert-admin init [sti]` skriver `api/save.js`, `api/verify-pin.js`, `build.mjs` og legger `--adm-*` i `static/css/tokens.css`.
-  - `oppskalert-admin tid [ms]` forklarer hvordan ett publiseringsløp måles, og skriver `.admin-tid` når tallet gis.
+  - `oppskalert-admin tid [ms]` forklarer hvordan ett publiseringsløp måles, og skriver `admin-tid.json` når tallet gis.
   - `oppskalert-admin dev` starter den lokale redigeringsløkken på port 8899.
 
 - [ ] **Step 1: Skriv de feilende testene**
@@ -2062,8 +2065,9 @@ function tid() {
   console.log('og klienten trykker Publiser en gang til.');
   console.log('\nNaar du har tallet: oppskalert-admin tid <millisekunder>');
   if (/^\d+$/.test(String(sti))) {
-    writeFileSync(join(rot === sti ? process.cwd() : rot, '.admin-tid'), `${sti}\n`);
-    console.log(`\nSkrev .admin-tid med ${sti} ms.`);
+    const fil = join(process.cwd(), 'admin-tid.json');
+    writeFileSync(fil, JSON.stringify({ rebuildMs: Number(sti), malt: new Date().toISOString() }, null, 2) + '\n');
+    console.log(`\nSkrev admin-tid.json med ${sti} ms.`);
   }
 }
 
