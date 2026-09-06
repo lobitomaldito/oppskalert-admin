@@ -1,0 +1,20 @@
+{
+  "name": "oppskalert-admin",
+  "version": "0.1.0",
+  "description": "Inline redigering og publisering til git for statiske sider.",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:lobitomaldito/oppskalert-admin",
+  "engines": { "node": ">=18" },
+  "exports": {
+    "./build": "./build/index.mjs",
+    "./doctor": "./doctor/index.mjs",
+    "./api/save.js": "./api/save.js",
+    "./api/verify-pin.js": "./api/verify-pin.js",
+    "./seksjoner/*": "./seksjoner/*"
+  },
+  "bin": { "oppskalert-admin": "./bin/oppskalert-admin.mjs" },
+  "files": ["build", "editor", "api", "doctor", "seksjoner", "bin", "README.md"],
+  "scripts": { "test": "node --test test/**/*.test.mjs" },
+  "dependencies": { "node-html-parser": "^6.1.13" }
+}
