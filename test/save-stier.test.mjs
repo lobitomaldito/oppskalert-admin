@@ -31,10 +31,14 @@ test('avviser filendelser som ikke er bilder', () => {
   assert.equal(trygStI('static/assets/uploads/a.html'), null);
 });
 
-test('godtar jpg, jpeg, png, webp, gif og svg', () => {
-  for (const e of ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg']) {
+test('godtar jpg, jpeg, png, webp og gif', () => {
+  for (const e of ['jpg', 'jpeg', 'png', 'webp', 'gif']) {
     assert.ok(trygStI(`static/assets/uploads/a.${e}`), e);
   }
+});
+
+test('avviser svg, som kan baere kjoerbart script paa kundens eget origin', () => {
+  assert.equal(trygStI('static/assets/uploads/logo.svg'), null);
 });
 
 test('grensen for én publisering er 3,5 MB', () => {

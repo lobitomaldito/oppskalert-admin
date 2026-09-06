@@ -19,7 +19,16 @@ export function checkPin(req, innsendt, riktig) {
     return { ok: false, status: 500, error: 'Innlogging er ikke satt opp på serveren (ADMIN_PIN mangler).' };
   }
 
-  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+  // Vercel setter x-vercel-forwarded-for og x-real-ip selv, og en klient kan
+  // ikke forfalske dem. x-forwarded-for kan klienten derimot skrive inn i:
+  // sender den "1.2.3.4" og proxyen appender, er foerste ledd klientens eget
+  // paafunn. Foerste ledd var derfor en gratis omgaaelse av hele sperren.
+  // Siste ledd er det naermeste hoppet, og det kan klienten ikke sette.
+  const videresendt = String(req.headers['x-forwarded-for'] || '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  const ip = req.headers['x-vercel-forwarded-for']
+    || req.headers['x-real-ip']
+    || videresendt[videresendt.length - 1]
     || req.socket?.remoteAddress
     || 'ukjent';
   const na = Date.now();
@@ -29,6 +38,10 @@ export function checkPin(req, innsendt, riktig) {
     const min = Math.ceil((rad.sperretTil - na) / 60000);
     return { ok: false, status: 429, error: `For mange forsøk. Prøv igjen om ${min} min.` };
   }
+
+  // Sperren har gaatt ut. Uten denne nullstillingen staar bom fortsatt paa 5,
+  // og én bomtast laaser 15 minutter til, i det uendelige.
+  if (rad.sperretTil) { rad.bom = 0; rad.sperretTil = 0; }
 
   if (innsendt !== riktig) {
     rad.bom++;

@@ -5,7 +5,9 @@ export const UPLOAD_PREFIKS = 'static/assets/uploads/';
 export const MAKS_PAYLOAD = 3.5 * 1024 * 1024;
 
 const LOVLIG_FILNAVN = /^[A-Za-z0-9._-]+$/;
-const LOVLIG_ENDELSE = /\.(jpe?g|png|webp|gif|svg)$/i;
+// svg er med vilje ikke med. En svg er et dokument som kan bere <script>, og
+// den ville kjort paa kundens eget origin. Klientopplastinger er foto.
+const LOVLIG_ENDELSE = /\.(jpe?g|png|webp|gif)$/i;
 
 export function trygStI(sti) {
   if (typeof sti !== 'string') return null;

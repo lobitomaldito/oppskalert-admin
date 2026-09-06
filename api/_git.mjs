@@ -19,13 +19,22 @@ async function kall(url, token, init, hent) {
   return tekst ? JSON.parse(tekst) : {};
 }
 
+// 404 betyr at fila ikke finnes enda, og da er null riktig svar: kalleren
+// starter fra et tomt objekt. Alt annet (403, 500, 401, oedelagt JSON) er en
+// forbigaaende feil, og da MAA vi kaste. Behandlet som "tom fil" ville en 500
+// gjort delta-en til hele innholdet, og publiseringen ville slettet alt
+// klienten ikke rorte i denne runden.
 export async function lesFil({ repo, branch, token, sti, hent = fetch }) {
   const r = await hent(`${API}/repos/${repo}/contents/${sti}?ref=${branch}`, { headers: hoder(token) });
-  if (!r.ok) return null;
+  if (r.status === 404) return null;
+  const tekst = await r.text();
+  if (!r.ok) throw new Error(`GitHub ${r.status}: ${tekst.slice(0, 140)}`);
   try {
-    const j = JSON.parse(await r.text());
+    const j = JSON.parse(tekst);
     return JSON.parse(Buffer.from(j.content, 'base64').toString('utf8'));
-  } catch { return null; }
+  } catch {
+    throw new Error('Innholdsfila i repoet lar seg ikke lese. Publisering avbrutt for aa ikke overskrive den.');
+  }
 }
 
 export async function commitFiler({ repo, branch, token, melding, filer, hent = fetch }) {

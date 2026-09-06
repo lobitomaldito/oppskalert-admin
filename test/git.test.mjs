@@ -90,3 +90,25 @@ test('lesFil dekoder base64 og parser json', async () => {
   const hent = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ content: innhold }) });
   assert.deepEqual(await lesFil({ repo: 'a/b', branch: 'main', token: 't', sti: 'x.json', hent }), { a: 1 });
 });
+
+test('lesFil kaster paa 500, saa en forbigaaende feil ikke leses som tom fil', async () => {
+  const hent = async () => ({ ok: false, status: 500, text: async () => 'Server Error' });
+  await assert.rejects(
+    () => lesFil({ repo: 'a/b', branch: 'main', token: 't', sti: 'x.json', hent }),
+    /GitHub 500/
+  );
+});
+
+test('lesFil kaster paa oedelagt json i stedet for aa returnere tomt', async () => {
+  const hent = async () => ({ ok: true, status: 200, text: async () => '{ ikke json' });
+  await assert.rejects(
+    () => lesFil({ repo: 'a/b', branch: 'main', token: 't', sti: 'x.json', hent }),
+    /lar seg ikke lese/
+  );
+});
+
+test('feiler et steg foer PATCH, staar branchen urort', async () => {
+  const { hent, kall } = falskGitHub({ 'git/trees': 'FEIL' });
+  await assert.rejects(() => commitFiler({ ...grunn, filer: [{ sti: 'a.json', innhold: '{}' }], hent }));
+  assert.equal(kall.some((k) => k.metode === 'PATCH'), false);
+});

@@ -45,3 +45,14 @@ test('sperren gjelder per ip', () => {
   for (let i = 0; i < 5; i++) checkPin(req('5.5.5.5'), 'feil', '1234');
   assert.deepEqual(checkPin(req('6.6.6.6'), '1234', '1234'), { ok: true });
 });
+
+test('naar sperren har gaatt ut, starter telleren paa nytt', (t) => {
+  const naa = Date.now();
+  t.mock.method(Date, 'now', () => naa);
+  for (let i = 0; i < 5; i++) checkPin(req('7.7.7.7'), 'feil', '1234');
+  assert.equal(checkPin(req('7.7.7.7'), '1234', '1234').status, 429);
+
+  Date.now = () => naa + 16 * 60 * 1000;
+  assert.deepEqual(checkPin(req('7.7.7.7'), '1234', '1234'), { ok: true });
+  assert.match(checkPin(req('7.7.7.7'), 'feil', '1234').error, /4 forsøk igjen/);
+});

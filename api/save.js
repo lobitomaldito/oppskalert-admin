@@ -19,7 +19,19 @@ export default async function handler(req, res) {
   const branch = process.env.GITHUB_BRANCH || 'main';
   if (!repo || !token) return res.status(500).json({ ok: false, error: 'Mangler GITHUB_REPO eller GITHUB_TOKEN på serveren.' });
 
-  const stor = bilder.reduce((sum, b) => sum + String(b.data || '').length, 0);
+  if (!Array.isArray(bilder)) {
+    return res.status(400).json({ ok: false, error: 'Feltet bilder maa vaere en liste.' });
+  }
+  for (const b of bilder) {
+    if (!b || typeof b !== 'object' || typeof b.sti !== 'string' || typeof b.data !== 'string') {
+      return res.status(400).json({ ok: false, error: 'Hvert bilde maa ha sti og data som tekst.' });
+    }
+  }
+
+  // Base64 er 4 tegn per 3 byte. Maalt paa tegn ble det reelle taket 2,6 MB og
+  // ikke 3,5, og teksten talte ikke med i det hele tatt.
+  const byte = (s) => Math.floor(String(s).length * 3 / 4);
+  const stor = bilder.reduce((sum, b) => sum + byte(b.data), 0) + Buffer.byteLength(JSON.stringify(edits));
   if (stor > MAKS_PAYLOAD) {
     return res.status(413).json({
       ok: false,
@@ -30,15 +42,24 @@ export default async function handler(req, res) {
   const filer = [];
   for (const b of bilder) {
     const sti = trygStI(b.sti);
-    if (!sti) return res.status(400).json({ ok: false, error: `Ulovlig bildesti: ${String(b.sti).slice(0, 60)}` });
+    if (!sti) {
+      return res.status(400).json({
+        ok: false,
+        error: `Bildet kan ikke lagres: ${String(b.sti).split('/').pop().slice(0, 40)}. Tillatte format er jpg, png, webp og gif.`
+      });
+    }
     filer.push({ sti, innhold: String(b.data).split(',').pop(), base64: true });
   }
 
   const innholdSti = `content/${String(page).replace(/[^a-zA-Z0-9_-]/g, '')}.json`;
-  const naa = (await lesFil({ repo, branch, token, sti: innholdSti })) || {};
-  filer.push({ sti: innholdSti, innhold: JSON.stringify({ ...naa, ...edits }, null, 2) });
 
   try {
+    // Lesingen ligger INNE i try. Kaster den (403, 500, oedelagt fil), skal
+    // publiseringen avbrytes, ikke fortsette med et tomt utgangspunkt som
+    // ville slettet alt klienten ikke rorte i denne runden.
+    const naa = (await lesFil({ repo, branch, token, sti: innholdSti })) || {};
+    filer.push({ sti: innholdSti, innhold: JSON.stringify({ ...naa, ...edits }, null, 2) });
+
     const { sha } = await commitFiler({
       repo, branch, token,
       melding: `Innhold: ${page}${bilder.length ? ` og ${bilder.length} bilde(r)` : ''} (admin)`,
@@ -55,6 +76,9 @@ export default async function handler(req, res) {
       note: 'Committet. Vercel bygger og deployer.'
     });
   } catch (e) {
-    return res.status(502).json({ ok: false, error: String(e.message || e) });
+    return res.status(502).json({
+      ok: false,
+      error: `Publiseringen naadde ikke fram til GitHub. Det du har skrevet ligger trygt i nettleseren, proev igjen om litt. Teknisk: ${String(e.message || e).slice(0, 120)}`
+    });
   }
 }
