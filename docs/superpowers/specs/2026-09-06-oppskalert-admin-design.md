@@ -59,8 +59,8 @@ bare forkes. De fem utslagene over er symptomer på den ene tingen.
 
 ### 4.1 Pakken
 
-Nytt repo `oppskalert-admin`, **offentlig** på GitHub under en av egne kontoer
-(`lobitomaldito` er den som er innlogget i `gh` nå; `mackeesy` er like gyldig).
+Nytt repo `lobitomaldito/oppskalert-admin`, **offentlig** på GitHub.
+Konto og synlighet bestemt 2026-09-06.
 
 Begrunnelsen for at det skal være offentlig:
 
@@ -282,11 +282,17 @@ fra Alphaneg og ikke skrives om.
 Første kundeside bygget på pakken blir prøven. Går den gjennom uten
 håndredigering av motorfiler, virker modellen.
 
-## 11. Åpne avgjørelser
+## 11. Avgjørelser
 
-1. **Konto for motorrepoet:** `lobitomaldito` (innlogget i `gh` nå) eller
-   `mackeesy`. Begge er egne kontoer.
-2. **Offentlig repo bekreftes.** Anbefalt og teknisk nødvendig for at Vercel
-   skal installere uten en committet nøkkel. Alternativet er `--vendor`.
-3. **Token-navn** for seksjonene fastsettes i implementeringsplanen, avledet fra
-   det eksisterende sidene allerede bruker.
+Tatt 2026-09-06:
+
+1. **Konto:** `lobitomaldito`. Egen konto, samme eier som `mackeesy`.
+2. **Synlighet:** offentlig. Kreves for at Vercel skal installere uten en
+   committet nøkkel. `--vendor` blir dermed fallback, ikke hovedvei.
+3. **Chat-assistenten** portes, men står av som standard.
+4. **Kun nye sider.** De 45 uten admin og de 4 med full stack står urørt.
+
+Gjenstår:
+
+5. **Token-navn** for seksjonene, avledes i implementeringsplanen fra det
+   eksisterende sider allerede bruker.
