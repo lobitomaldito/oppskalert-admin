@@ -998,13 +998,21 @@
         // saa koeen maa toemmes: ellers sender hver ny Publiser den samme posten,
         // og eneste vei ut er en omlasting som kaster alle tekstendringene.
         if (res.status === 400) {
+          // Bare elementene i den avviste bunken skal ryddes. data-img-url er
+          // ikke et koeflagg: for et bilde som allerede ER publisert, er det
+          // feltets kilde til den ekte filstien. Ryddes det bort der, faller
+          // currentImageUrl tilbake paa base64-strengen i src, og neste
+          // Publiser skriver den inn i innholdet i stedet for stien.
+          var avviste = {};
+          for (var ai = 0; ai < ventendeBilder.length; ai++) {
+            avviste['/' + String(ventendeBilder[ai].sti).replace(/^static\//, '')] = 1;
+          }
           ventendeBilder = [];
-          // Attributtet peker paa en fil som aldri ble lastet opp. Blir det
-          // staaende, skriver neste Publiser en sti til ingenting, og bildet
-          // er stille oedelagt paa live i stedet for aa gi en feilmelding.
-          var forkastet = document.querySelectorAll('[data-img-url]');
-          for (var fi = 0; fi < forkastet.length; fi++) {
-            forkastet[fi].removeAttribute('data-img-url');
+          var merkede = document.querySelectorAll('[data-img-url]');
+          for (var mi = 0; mi < merkede.length; mi++) {
+            if (avviste[merkede[mi].getAttribute('data-img-url')]) {
+              merkede[mi].removeAttribute('data-img-url');
+            }
           }
           status.textContent = '✗ ' + (res.j.error || 'Bildet ble avvist') + ' Bildet er fjernet fra køen, teksten din er beholdt.';
           return;
