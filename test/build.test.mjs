@@ -75,3 +75,11 @@ test('dist-mappa kan ikke vaere prosjektroten, som ville slettet kildefilene', (
   assert.ok(existsSync(join(rot, 'templates', 'index.html')));
   assert.ok(existsSync(join(rot, 'content', 'index.json')));
 });
+
+test('dist lik en kildemappe kaster, og kilden staar urort', () => {
+  for (const farlig of ['templates', 'content', 'static']) {
+    const rot = lagProsjekt();
+    assert.throws(() => build({ rot, dist: farlig }), /kildefilene/);
+    assert.ok(existsSync(join(rot, farlig)), `${farlig} skal fortsatt finnes`);
+  }
+});

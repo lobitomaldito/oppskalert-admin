@@ -40,9 +40,10 @@ export function build(config = {}) {
     catch { console.warn(`  ! ${side}.json lar seg ikke lese som JSON, bruker malens standardtekst`); return {}; }
   }
 
-  // rmSync er den ene destruktive operasjonen i pakken. En config med dist: '.'
-  // ville slettet templates/, content/ og static/ i samme slengen.
-  if (DIST === rot || TPL.startsWith(DIST + sep) || INNHOLD.startsWith(DIST + sep)) {
+  // rmSync er den ene destruktive operasjonen i pakken. Vakten maa fange baade
+  // dist som forelder til en kildemappe OG dist lik en av dem: dist: 'templates'
+  // slettet malene og meldte "Bygde 0 sider" som en suksess.
+  if (DIST === rot || [TPL, INNHOLD, STATISK].some((k) => k === DIST || k.startsWith(DIST + sep))) {
     throw new Error(`dist-mappa (${DIST}) inneholder kildefilene og kan ikke slettes. Velg en egen mappe.`);
   }
 
