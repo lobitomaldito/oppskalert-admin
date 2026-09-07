@@ -43,7 +43,10 @@ test('strong b styrer b inne i strong, ikke fritt b, og skal ikke flagges', () =
 });
 
 test('manglende admin-tokens er en feil', () => {
-  const funn = tokens.sjekk(p([{ sti: 'static/css/tokens.css', tekst: ':root{--font-brod:x}' }]));
+  const funn = tokens.sjekk(p([
+    { sti: 'static/css/tokens.css', tekst: ':root{--font-brod:x}' },
+    { sti: 'templates/index.html', tekst: '<h1>en side som har glemt fargene</h1>' }
+  ]));
   assert.equal(funn.length, 1);
   assert.match(funn[0].melding, /--adm-aksent/);
 });
