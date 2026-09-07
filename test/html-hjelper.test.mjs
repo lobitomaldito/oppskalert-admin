@@ -91,3 +91,25 @@ test('bilde i en listemal er dekket', () => {
   const h = '<main><ul data-editable-list="k"><li data-list-item><img src="/a.jpg"></li></ul></main>';
   assert.equal(bilder(h)[0].dekket, true);
 });
+
+test('et element der hele teksten ligger i markerte barn er dekket', () => {
+  const h = '<main><h1><span data-edit="a">Vi hjelper deg</span><em data-edit="b">videre</em></h1></main>';
+  assert.equal(bladnoder(h).filter((n) => !n.dekket).length, 0);
+});
+
+test('delvis instrumentert element meldes fortsatt', () => {
+  const h = '<main><h1><span data-edit="a">Vi hjelper deg</span> og mer tekst utenfor</h1></main>';
+  const u = bladnoder(h).filter((n) => !n.dekket);
+  assert.equal(u.length, 1);
+  assert.equal(u[0].tagg, 'h1');
+});
+
+test('umarkerte inline-barn gjor ikke elementet dekket', () => {
+  const h = '<main><p>Vi tilbyr <strong>rask levering</strong> i Oslo</p></main>';
+  assert.equal(bladnoder(h).filter((n) => !n.dekket).length, 1);
+});
+
+test('whitespace mellom markerte barn teller ikke som udekket tekst', () => {
+  const h = '<main><h1>\n  <span data-edit="a">Vi hjelper deg</span>\n  <em data-edit="b">videre</em>\n</h1></main>';
+  assert.equal(bladnoder(h).filter((n) => !n.dekket).length, 0);
+});

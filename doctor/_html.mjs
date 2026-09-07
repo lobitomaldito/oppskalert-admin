@@ -111,6 +111,31 @@ function erBladnode(el) {
   return true;
 }
 
+// Alphanegs delte heltitler ser slik ut: <h1><span data-edit="a">Vi hjelper
+// deg</span><em data-edit="b">videre</em></h1>. harAttributt gaar bare
+// oppover i treet, saa den finner aldri markorene naar de sitter paa
+// inline-barna og ikke paa h1 selv. Elementet er likevel fullt
+// instrumentert, bare fordelt paa barna. Denne funksjonen sjekker det
+// motsatte: er hele den synlige teksten i elementet dekket av barn som
+// selv baerer en markor (rekursivt, saa et umarkert mellomledd med bare
+// markerte barn teller ogsaa)? Er en del av teksten utenfor de markerte
+// barna (et ord som ikke ligger i noe span, eller et skilletegn som komma
+// eller punktum mellom to markerte barn), regnes elementet som delvis
+// instrumentert og skal fortsatt meldes. Rent whitespace mellom barna
+// (linjeskift og innrykk i kildekoden) teller ikke som tekst utenfor
+// markorene.
+function heleTekstenDekketAvBarn(el) {
+  for (const n of el.childNodes) {
+    if (n.nodeType === NodeType.TEXT_NODE) {
+      if (n.rawText.trim() !== '') return false;
+    } else if (n.nodeType === NodeType.ELEMENT_NODE) {
+      const egenMarkert = typeof n.hasAttribute === 'function' && DEKKET_ATTRIBUTTER.some((a) => n.hasAttribute(a));
+      if (!egenMarkert && !heleTekstenDekketAvBarn(n)) return false;
+    }
+  }
+  return true;
+}
+
 export function bladnoder(html) {
   const rot = finnRot(html);
   const linje = linjeOppslag(html);
@@ -131,7 +156,7 @@ export function bladnoder(html) {
       tagg: el.tagName.toLowerCase(),
       tekst,
       linje: linje(el.range[0]),
-      dekket: harAttributt(el, DEKKET_ATTRIBUTTER),
+      dekket: harAttributt(el, DEKKET_ATTRIBUTTER) || heleTekstenDekketAvBarn(el),
       ignorert: harAttributt(el, [IGNORER_ATTRIBUTT]),
       ramme: erIRamme(el)
     });
