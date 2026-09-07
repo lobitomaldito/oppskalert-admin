@@ -4,12 +4,17 @@
 // kolonner), tre er et moenster som helst boer vaere en liste kunden selv
 // kan legge til og fjerne rader i.
 import { parse, NodeType } from 'node-html-parser';
+import { malFiler } from '../_hjelpere.mjs';
 
 const TERSKEL = 3;
 
-function malFiler(p) {
-  return p.filer.filter((f) => f.sti.startsWith('templates/') && f.sti.endsWith('.html'));
-}
+// Rene presentasjonsklasser: scroll-avsloring og forsinkelsestrinn paa
+// samme kort splitter ellers en liste paa elleve i tre grupper, fordi
+// "presse-card reveal", "presse-card reveal delay-1" og
+// "presse-card reveal delay-2" blir tre ulike noekler. Settet er valgt ut
+// fra vanlige konvensjoner for scroll-/JS-drevet animasjon, ikke bare det
+// ene tilfellet vi maalte paa Alphaneg. Se rapporten for begrunnelsen.
+const ANIMASJONSKLASSE = /^(reveal|revealed|visible|active|in-view|delay-|duration-|is-|js-|anim-|animate-|fade-|aos-)/;
 
 function harForelderMedAttributt(el, attributt) {
   let node = el;
@@ -29,7 +34,11 @@ function linjeFor(html, offset) {
 }
 
 function nokkelFor(el) {
-  const klasse = (el.getAttribute('class') || '').trim();
+  const klasse = (el.getAttribute('class') || '')
+    .trim()
+    .split(/\s+/)
+    .filter((k) => k && !ANIMASJONSKLASSE.test(k))
+    .join(' ');
   return `${el.tagName.toLowerCase()}|${klasse}`;
 }
 
@@ -51,7 +60,12 @@ export default {
     const funn = [];
     for (const fil of malFiler(p)) {
       const dokument = parse(fil.tekst);
-      const rot = dokument.querySelector('main') || dokument;
+      // Uten <main>: les fra <body>, ikke hele dokumentet. Ellers blir
+      // <meta>, <link> og <script> i <head> lest som soesken, og tre
+      // identiske <meta name="viewport">-varianter (det finnes ingen, men
+      // <meta property="og:..."> og lignende gjentar seg fort) meldes som
+      // en liste kunden skal redigere. <head> er aldri noe kunden ser.
+      const rot = dokument.querySelector('main') || dokument.querySelector('body') || dokument;
       const elementer = [rot, ...rot.querySelectorAll('*')];
 
       for (const el of elementer) {

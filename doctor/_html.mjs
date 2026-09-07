@@ -11,6 +11,13 @@ const IGNORER_ATTRIBUTT = 'data-edit-ignore';
 const BILDE_DEKKET_ATTRIBUTTER = ['data-edit-image', 'data-list-image-field', 'data-editable-list'];
 const BAKGRUNNSBILDE = /background-image\s*:\s*url\(\s*['"]?([^'")]+)['"]?\s*\)/i;
 
+// Topp- og bunntekst er delt rammeverk, ikke sideinnhold. Et treff her skal
+// fortsatt meldes (feltet blir aldri erklaert fast av seg selv), men skal
+// ikke stoppe en levering. Gjelder uansett om malen har <main> eller ikke:
+// har den <main>, ligger header/footer/nav som regel utenfor rota uansett,
+// men et <nav> inni <main> skal ogsaa dempes.
+const RAMME_TAGGER = new Set(['header', 'footer', 'nav']);
+
 // Linjenummer beregnes fra elementets tegn-offset i kildeteksten (range fra
 // node-html-parser), ikke ved aa soeke opp elementets outerHTML i teksten.
 // Samme markup finnes ofte flere ganger i samme fil (to like kort, en
@@ -43,6 +50,15 @@ function harAttributt(el, attributter) {
   return false;
 }
 
+function erIRamme(el) {
+  let node = el;
+  while (node) {
+    if (typeof node.tagName === 'string' && RAMME_TAGGER.has(node.tagName.toLowerCase())) return true;
+    node = node.parentNode;
+  }
+  return false;
+}
+
 function finnRot(html) {
   const dokument = parse(html);
   return dokument.querySelector('main') || dokument;
@@ -58,6 +74,17 @@ function erInnhold(tekst) {
   return tekst.length >= 2 && HAR_BOKSTAV_ELLER_SIFFER.test(tekst);
 }
 
+// En byggeplassholder som "{{FORFATTER_BIO}}" eller "«{{ORIGINALTITTEL}}»" er
+// ikke innhold, det er noe byggescriptet skal erstatte foer siden noensinne
+// vises. Krever at HELE den trimmede teksten er plassholderen, eventuelt med
+// et anforselstegn paa hver side. "Stein-Eriks forhandlingsraad #{{NR}}" er
+// ikke det, der er placeholderen bare en del av en ekte tekst, og treffet
+// skal fortsatt telle.
+const REN_PLASSHOLDER = /^[«"']?\{\{[A-Z0-9_]+\}\}[»"']?$/;
+function erPlassholder(tekst) {
+  return REN_PLASSHOLDER.test(tekst);
+}
+
 export function bladnoder(html) {
   const rot = finnRot(html);
   const linje = linjeOppslag(html);
@@ -67,12 +94,14 @@ export function bladnoder(html) {
     if (barnElementer.length > 0) continue;
     const tekst = (el.text || '').trim();
     if (!erInnhold(tekst)) continue;
+    if (erPlassholder(tekst)) continue;
     funn.push({
       tagg: el.tagName.toLowerCase(),
       tekst,
       linje: linje(el.range[0]),
       dekket: harAttributt(el, DEKKET_ATTRIBUTTER),
-      ignorert: harAttributt(el, [IGNORER_ATTRIBUTT])
+      ignorert: harAttributt(el, [IGNORER_ATTRIBUTT]),
+      ramme: erIRamme(el)
     });
   }
   return funn;
@@ -96,7 +125,8 @@ export function bilder(html) {
       kilde,
       linje: linje(el.range[0]),
       dekket: harAttributt(el, BILDE_DEKKET_ATTRIBUTTER),
-      ignorert: harAttributt(el, [IGNORER_ATTRIBUTT])
+      ignorert: harAttributt(el, [IGNORER_ATTRIBUTT]),
+      ramme: erIRamme(el)
     });
   }
   return funn;
