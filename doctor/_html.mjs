@@ -48,6 +48,16 @@ function finnRot(html) {
   return dokument.querySelector('main') || dokument;
 }
 
+// Terskelen finnes for aa hoppe over tomme noder og rene dekortegn (punkt,
+// pil, strek, loddrett strek og lignende), ikke for aa luke ut korte ord.
+// Norske overskrifter som "Om" og "Vi" er ekte innhold paa to tegn og skal
+// telle. Derfor: minst to tegn OG minst en bokstav eller et siffer. \p{L}
+// daekker ogsaa aeoeaa.
+const HAR_BOKSTAV_ELLER_SIFFER = /[\p{L}\p{N}]/u;
+function erInnhold(tekst) {
+  return tekst.length >= 2 && HAR_BOKSTAV_ELLER_SIFFER.test(tekst);
+}
+
 export function bladnoder(html) {
   const rot = finnRot(html);
   const linje = linjeOppslag(html);
@@ -56,7 +66,7 @@ export function bladnoder(html) {
     const barnElementer = el.childNodes.filter((n) => n.nodeType === NodeType.ELEMENT_NODE);
     if (barnElementer.length > 0) continue;
     const tekst = (el.text || '').trim();
-    if (tekst.length < 3) continue;
+    if (!erInnhold(tekst)) continue;
     funn.push({
       tagg: el.tagName.toLowerCase(),
       tekst,

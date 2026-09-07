@@ -40,8 +40,14 @@ test('bare bladnoder, en div med en p inni teller som p', () => {
   assert.deepEqual(n.map((x) => x.tagg), ['p']);
 });
 
-test('tom eller altfor kort tekst hoppes over', () => {
-  assert.equal(bladnoder('<main><p></p><p>  </p><p>ok</p></main>').length, 0);
+test('tomme noder og rene dekortegn hoppes over', () => {
+  assert.equal(bladnoder('<main><p></p><p>  </p><p>•</p><p>→</p></main>').length, 0);
+});
+
+test('en kort norsk overskrift som Om teller som innhold', () => {
+  const n = bladnoder('<main><h2>Om</h2></main>');
+  assert.equal(n.length, 1);
+  assert.equal(n[0].tagg, 'h2');
 });
 
 test('linjenummeret peker paa elementet', () => {
