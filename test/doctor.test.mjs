@@ -66,6 +66,16 @@ test('tokens definert men fila aldri lenket er en feil, siden baren da kjorer pa
   assert.match(funn[0].melding, /ingen mal lenker/);
 });
 
+test('motorens egen fallback-css teller ikke som sidens token-fil', () => {
+  const css = ':root{--adm-aksent:#111;--adm-flate:#222;--adm-tekst:#333;--adm-fare:#444;--adm-ok:#555}';
+  const funn = tokens.sjekk(p([
+    { sti: 'editor/edit.css', tekst: css },
+    { sti: 'templates/index.html', tekst: '<h1>ingen tokens-fil</h1>' }
+  ]));
+  assert.equal(funn.length, 1);
+  assert.match(funn[0].melding, /mangler farger/);
+});
+
 test('google fonts er en feil', () => {
   const funn = fonts.sjekk(p([{ sti: 'templates/a.html', tekst: '<link href="https://fonts.googleapis.com/css2?family=Inter">' }]));
   assert.equal(funn.length, 1);

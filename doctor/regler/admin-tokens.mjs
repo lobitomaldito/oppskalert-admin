@@ -5,7 +5,11 @@ export default {
   navn: 'admin-tokens',
   alvor: 'feil',
   sjekk: (p) => {
-    const cssFiler = p.filer.filter((f) => f.sti.endsWith('.css'));
+    // editor/edit.css definerer de fem variablene som fallback, saa en side som
+    // glemmer aa sette dem faar en brukbar bar i stedet for en usynlig. Den er
+    // motorens egen fil og aldri en sides token-fil, saa den skal ikke telle
+    // som kandidat: ellers melder regelen at motorens fallback ikke er lenket.
+    const cssFiler = p.filer.filter((f) => f.sti.endsWith('.css') && !f.sti.startsWith('editor/'));
     const definerer = cssFiler.filter((f) => KREVDE.every((v) => f.tekst.includes(v)));
 
     if (definerer.length === 0) {
