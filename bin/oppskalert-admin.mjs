@@ -37,9 +37,14 @@ function init() {
   }
   const tokensFil = join(rot, 'static/css/tokens.css');
   mkdirSync(join(rot, 'static/css'), { recursive: true });
-  if (!existsSync(tokensFil)) writeFileSync(tokensFil, TOKENS.trimStart());
-  else if (!readFileSync(tokensFil, 'utf8').includes('--adm-aksent')) appendFileSync(tokensFil, TOKENS);
-  console.log('\nFerdig. Sett ADMIN_PIN, GITHUB_REPO og GITHUB_TOKEN i Vercel.');
+  let tokensEndret = false;
+  if (!existsSync(tokensFil)) { writeFileSync(tokensFil, TOKENS.trimStart()); tokensEndret = true; }
+  else if (!readFileSync(tokensFil, 'utf8').includes('--adm-aksent')) { appendFileSync(tokensFil, TOKENS); tokensEndret = true; }
+  if (tokensEndret) console.log(`  skrev static/css/tokens.css`);
+  console.log('\nTo ting du maa gjore selv:');
+  console.log('  1. Legg <link rel="stylesheet" href="/css/tokens.css"> i <head> i hver mal,');
+  console.log('     etter admin/edit.css. Uten den kjorer admin-baren paa fallbackfarger.');
+  console.log('  2. Sett ADMIN_PIN, GITHUB_REPO og GITHUB_TOKEN i Vercel.');
 }
 
 function doctor() {

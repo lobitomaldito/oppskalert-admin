@@ -48,9 +48,22 @@ test('manglende admin-tokens er en feil', () => {
   assert.match(funn[0].melding, /--adm-aksent/);
 });
 
-test('alle fem tokens til stede er greit', () => {
+test('fem tokens definert og fila lenket fra en mal er greit', () => {
   const css = ':root{--adm-aksent:#111;--adm-flate:#222;--adm-tekst:#333;--adm-fare:#444;--adm-ok:#555}';
-  assert.deepEqual(tokens.sjekk(p([{ sti: 'static/css/tokens.css', tekst: css }])), []);
+  assert.deepEqual(tokens.sjekk(p([
+    { sti: 'static/css/tokens.css', tekst: css },
+    { sti: 'templates/index.html', tekst: '<link rel="stylesheet" href="/css/tokens.css">' }
+  ])), []);
+});
+
+test('tokens definert men fila aldri lenket er en feil, siden baren da kjorer paa fallback', () => {
+  const css = ':root{--adm-aksent:#111;--adm-flate:#222;--adm-tekst:#333;--adm-fare:#444;--adm-ok:#555}';
+  const funn = tokens.sjekk(p([
+    { sti: 'static/css/tokens.css', tekst: css },
+    { sti: 'templates/index.html', tekst: '<h1>ingen lenke her</h1>' }
+  ]));
+  assert.equal(funn.length, 1);
+  assert.match(funn[0].melding, /ingen mal lenker/);
 });
 
 test('google fonts er en feil', () => {

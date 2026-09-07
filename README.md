@@ -64,9 +64,32 @@ I hver mal under `templates/`:
 `data-page-key` avgjør hvilken `content/<side>.json` siden leser og skriver.
 Uten den starter editoren ikke.
 
+**Ikke lenk `admin/edit.css` i `<head>`.** `edit.js` injiserer stilarket selv
+når en verifisert admin er inne. Lenkes det i malen også, laster hver
+besøkende 14,7 kB CSS de aldri bruker.
+
 Admin åpnes ved å skrive `admin` på tastaturet, eller ved å trykke fem ganger på
 kredittlinja i bunnen (`.footer__credit`) på mobil. Et element med
 `data-admin-login` gir en synlig innloggingslenke i tillegg.
+
+### Migrere et eksisterende prosjekt
+
+Gjelder et prosjekt som fra før har sin egen, håndbygde versjon av panelet.
+Rydd den bort før `init` kjører.
+
+```bash
+rm -f api/save.js api/save-image.js api/verify-pin.js api/_rateLimit.js
+rm -rf build.mjs dev-server.mjs static/admin node_modules dist
+npm pkg delete dependencies.node-html-parser
+```
+
+Første linje sletter admin-motorens egne filer i `api/` ved navn. Siden kan ha
+egne endepunkter der, som et kontaktskjema, og en `rm -rf api` sletter dem
+også. Andre filer i `api/` er sidens egne og skal stå.
+
+Fortsett med installeringen over: `npm i`, så `npx oppskalert-admin init .`.
+Kjør `oppskalert-admin doctor .` og `node build.mjs` etterpå for å bekrefte at
+siden bygger med det nye panelet.
 
 ## Miljøvariabler
 

@@ -18,7 +18,10 @@ function prosjekt(htmlInnhold) {
   mkdirSync(join(rot, 'templates'));
   mkdirSync(join(rot, 'static', 'css'), { recursive: true });
   mkdirSync(join(rot, 'node_modules', 'x'), { recursive: true });
-  writeFileSync(join(rot, 'templates', 'index.html'), htmlInnhold);
+  // tokens.css maa lenkes fra en mal. Uten lenken flagger admin-tokens-regelen
+  // denne fixturen sin egen tokens.css som ulenket. Se doctor/regler/admin-tokens.mjs.
+  writeFileSync(join(rot, 'templates', 'index.html'),
+    `<link rel="stylesheet" href="/css/tokens.css">\n${htmlInnhold}`);
   writeFileSync(join(rot, 'static', 'css', 'tokens.css'),
     ':root{--adm-aksent:#1;--adm-flate:#2;--adm-tekst:#3;--adm-fare:#4;--adm-ok:#5}');
   writeFileSync(join(rot, 'node_modules', 'x', 'stor.html'), '<li data-list-item style="margin:1rem">');
