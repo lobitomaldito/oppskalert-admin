@@ -608,15 +608,16 @@
 
   // Bilder lastes IKKE opp med det samme lenger. De legges til side og reiser
   // med publiseringen, slik at tekst og bilder blir ett commit og ett
-  // Vercel-bygg. Bivirkning verdt aa ha: et bilde klienten angrer paa havner
-  // aldri i repoet.
+  // Vercel-bygg. Koeen ryddes ikke av undo(): den bytter innerHTML og roerer
+  // aldri denne lista. Filtreringen i publish() er det som holder et angret
+  // bilde ute av repoet.
   var ventendeBilder = [];
 
-  // Serveren tar 3,5 MB, men teller ogsaa med teksten paa siden. Klienten
-  // kjenner ikke tekststoerrelsen paa opplastingstidspunktet, saa den holder
-  // igjen 100 kB. Aa nekte et bilde litt for tidlig er riktig vei aa feile:
-  // alternativet er en 413 klienten ikke kan gjore noe med.
-  var MAKS_KOE = 3.5 * 1024 * 1024 - 100 * 1024;
+  // Serveren tar 3,0 MB dekodet, men teller ogsaa med teksten paa siden.
+  // Klienten kjenner ikke tekststoerrelsen paa opplastingstidspunktet, saa den
+  // holder igjen 100 kB. Aa nekte et bilde litt for tidlig er riktig vei aa
+  // feile: alternativet er en 413 klienten ikke kan gjore noe med.
+  var MAKS_KOE = 3.0 * 1024 * 1024 - 100 * 1024;
   function koeStorrelse() {
     var sum = 0;
     for (var i = 0; i < ventendeBilder.length; i++) {
@@ -938,7 +939,7 @@
   // does NOT re-send the save: every attempt spends one of the five the server
   // allows before a 15-minute lockout, so the retry should be a decision.
   function offerPinRetry() {
-    var again = prompt('Feil PIN.\n\nSkriv inn riktig PIN for å prøve på nytt.\nEndringene dine beholdes.');
+    var again = prompt('Feil PIN.\n\nSkriv inn riktig PIN for å prøve på nytt.\nEndringene dine står fortsatt på siden.');
     if (!again) return;
     sessionStorage.setItem('admin_pin', again.trim());
     status.textContent = 'PIN oppdatert. Trykk Publiser igjen.';
@@ -960,6 +961,22 @@
     listContainers.forEach(function (c) {
       edits[c.getAttribute('data-editable-list')] = collectList(c);
     });
+
+    // Angre erstatter innerHTML i redigeringsomraadet, saa et bilde klienten har
+    // angret finnes ikke lenger som data-img-url i DOM-en. Uten denne filtreringen
+    // ble det likevel commitet, som en foreldreloes fil ingen peker paa, og det
+    // opptok plass i koeen.
+    var iBruk = {};
+    var merkede = document.querySelectorAll('[data-img-url]');
+    for (var bi = 0; bi < merkede.length; bi++) {
+      iBruk[merkede[bi].getAttribute('data-img-url')] = 1;
+    }
+    var beholdt = [];
+    for (var vi = 0; vi < ventendeBilder.length; vi++) {
+      var vUrl = '/' + String(ventendeBilder[vi].sti).replace(/^static\//, '');
+      if (iBruk[vUrl]) beholdt.push(ventendeBilder[vi]);
+    }
+    ventendeBilder = beholdt;
 
     status.textContent = 'Publiserer …';
     publishBtn.disabled = true;
@@ -1014,7 +1031,7 @@
               merkede[mi].removeAttribute('data-img-url');
             }
           }
-          status.textContent = '✗ ' + (res.j.error || 'Bildet ble avvist') + ' Bildet er fjernet fra køen, teksten din er beholdt.';
+          status.textContent = '✗ ' + (res.j.error || 'Bildet ble avvist') + ' Bildet er fjernet fra køen, teksten din står fortsatt på siden.';
           return;
         }
         // For stor publisering: serveren sier hvor mye som er for mye, og en ny

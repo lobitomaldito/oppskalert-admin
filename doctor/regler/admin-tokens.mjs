@@ -38,7 +38,7 @@ export default {
     if (!lenket) {
       return [{
         fil: definerer[0].sti, linje: 0,
-        melding: `${definerer[0].sti} definerer admin-fargene, men ingen mal lenker til den. Legg inn en <link> i <head>, etter admin/edit.css.`
+        melding: `${definerer[0].sti} definerer admin-fargene, men ingen mal lenker til den. Legg inn en <link> i <head>.`
       }];
     }
     return [];

@@ -8,8 +8,9 @@ import fonts from './regler/ingen-google-fonts.mjs';
 import byggetid from './regler/malt-byggetid.mjs';
 import strek from './regler/tankestrek.mjs';
 import ikkeXmenY from './regler/ikke-x-men-y.mjs';
+import sidenokkel from './regler/sidenokkel.mjs';
 
-export const STANDARDREGLER = [margin, strongB, tokens, fonts, byggetid, strek, ikkeXmenY];
+export const STANDARDREGLER = [margin, strongB, tokens, fonts, byggetid, strek, ikkeXmenY, sidenokkel];
 
 export function kjor(prosjekt, regler = STANDARDREGLER) {
   const feil = [], varsler = [];

@@ -9,6 +9,7 @@ import fonts from '../doctor/regler/ingen-google-fonts.mjs';
 import byggetid from '../doctor/regler/malt-byggetid.mjs';
 import strek from '../doctor/regler/tankestrek.mjs';
 import ikkeXmenY from '../doctor/regler/ikke-x-men-y.mjs';
+import sidenokkel from '../doctor/regler/sidenokkel.mjs';
 
 const p = (filer) => ({ rot: '/x', filer });
 
@@ -120,6 +121,22 @@ test('en ekte motstilling flagges ogsaa, og det er meningen', () => {
 
 test('vanlig tekst uten moensteret gaar rent gjennom', () => {
   assert.deepEqual(ikkeXmenY.sjekk(p([{ sti: 'content/a.json', tekst: '{"a":"Vi tar befaring i hele Harstad."}' }])), []);
+});
+
+test('en side-noekkel som matcher malfilnavnet gaar rent gjennom', () => {
+  assert.deepEqual(sidenokkel.sjekk(p([
+    { sti: 'templates/om.html', tekst: '<body data-page-key="om">x</body>' }
+  ])), []);
+});
+
+test('en side-noekkel som ikke matcher malfilnavnet er en feil, siden publiseringen da gaar groent uten virkning', () => {
+  const funn = sidenokkel.sjekk(p([
+    { sti: 'templates/om.html', tekst: '<body data-page-key="om-oss">x</body>' }
+  ]));
+  assert.equal(sidenokkel.alvor, 'feil');
+  assert.equal(funn.length, 1);
+  assert.match(funn[0].melding, /content\/om-oss\.json/);
+  assert.match(funn[0].melding, /content\/om\.json/);
 });
 
 test('kjor skiller feil fra varsler', () => {

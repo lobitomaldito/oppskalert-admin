@@ -159,8 +159,10 @@ tilbake til standardteksten sin, og bygget logger en advarsel.
 
 Bilder klienten laster opp havner i `static/assets/uploads/`. Tillatte format er
 jpg, png, webp og gif. Svg er utelatt med vilje, siden en svg kan bære `<script>`
-og ville kjørt på kundens eget origin. Én publisering tar maks 3,5 MB til sammen,
-og over det ber editoren om å ta tekst og bilder i hver sin runde.
+og ville kjørt på kundens eget origin. Én publisering tar maks 3,0 MB til sammen,
+og over det ber editoren om å ta tekst og bilder i hver sin runde. Taket er satt i
+dekodede byte: kroppen sendes som base64, som er en tredjedel større på tråden, og
+over 4,5 MB avviser Vercel den før handleren kjører.
 
 ## Kommandoer
 
@@ -181,20 +183,30 @@ er samme løkke som i produksjon, uten ventetiden på Vercel.
 
 ## Kjente begrensninger
 
-**IP-sperren nullstilles ved kald start.** Fem feil PIN fra samme IP gir 15
-minutters sperre, men telleren ligger i minnet per funksjonsinstans. Starter
-instansen kaldt, er telleren null igjen. For en side med én admin er det
-akseptabelt. Skal det holde mot en seriøs angriper, må telleren flyttes til delt
-lagring, og da koster siden penger.
+**IP-sperren teller per funksjonsinstans.** Fem feil PIN fra samme IP gir 15
+minutters sperre, men telleren ligger i minnet i den instansen som tok imot
+forsøket. Tre ting svekker den. En kald start nullstiller telleren.
+`/api/save` og `/api/verify-pin` er to funksjoner på Vercel, med hver sin
+modulinstans og hvert sitt kart, så de teller hver for seg. Og kjører Vercel
+flere instanser samtidig, fordeler forsøkene seg utover dem, så den samlede
+grensen ligger godt over fem uten at noen instans har startet kaldt. For en side
+med én admin er det akseptabelt. Skal det holde mot en seriøs angriper, må
+telleren flyttes til delt lagring, og da koster siden penger.
+
+**Sett en PIN på minst seks siffer.** Sperren over er svakere enn de fem
+forsøkene den ser ut til å gi, siden hver funksjonsinstans teller for seg. Fire
+siffer er 10 000 kombinasjoner og lar seg gjette. Seks siffer er hundre ganger
+flere, og det holder mot den gjettehastigheten sperren slipper gjennom.
 
 **Skjulte listeelementer ligger fortsatt i HTML-en.** Skjuler klienten et kort,
 får det klassen `is-hidden-item` og `display:none`. Innholdet står i kildekoden og
 kan leses av hvem som helst. Bruk skjuling til å ta noe midlertidig ut av visning,
 aldri til noe som skal være hemmelig. Skal innholdet bort, slett kortet.
 
-**`oppskalert-admin dev` hører hjemme på egen maskin.** Den har ingen sperre mot
-gjetting, faller tilbake på PIN `1234` når `ADMIN_PIN` mangler, og skriver filer
-i prosjektet. Eksponer den aldri på et nett andre når.
+**`oppskalert-admin dev` hører hjemme på egen maskin.** Den lytter bare på
+127.0.0.1 og bruker samme PIN-sperre som produksjon, men den faller tilbake på
+PIN `1234` når `ADMIN_PIN` mangler, og den skriver filer i prosjektet. Legg den
+aldri ut gjennom en tunnel eller en proxy.
 
 ## Lisens
 

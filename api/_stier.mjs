@@ -2,7 +2,10 @@
 // i innholdet i samme runde. Da maa serveren validere stien: uten dette er
 // feltet en sti-traversering rett inn i repoet.
 export const UPLOAD_PREFIKS = 'static/assets/uploads/';
-export const MAKS_PAYLOAD = 3.5 * 1024 * 1024;
+// Vercel avviser kropper over 4,5 MB foer handleren kjorer. Kroppen baerer
+// base64, som er 4 tegn per 3 byte, saa taket maa settes i dekodede byte med
+// margin for JSON-rammen og teksten: 3,0 MB dekodet blir ca 4,0 MB paa traaden.
+export const MAKS_PAYLOAD = 3.0 * 1024 * 1024;
 
 const LOVLIG_FILNAVN = /^[A-Za-z0-9._-]+$/;
 // svg er med vilje ikke med. En svg er et dokument som kan bere <script>, og
@@ -27,5 +30,7 @@ export function trygStI(sti) {
 // og det gjorde den.
 export function trygSidenavn(page) {
   const rent = String(page == null ? '' : page).replace(/[^a-zA-Z0-9_-]/g, '');
-  return rent || null;
+  // Filsystemet tar 255 tegn. Uten grensen ga et langt navn ufanget
+  // ENAMETOOLONG, som drepte dev-serveren.
+  return rent && rent.length <= 100 ? rent : null;
 }

@@ -121,7 +121,7 @@ body.adm-editing .dm__media:has(.adm-posing)::after { display: none; }
    CV on Om). Marked clearly so the admin knows where to edit it. */
 .adm-readonly { position: relative; outline: 2px dashed color-mix(in srgb, var(--adm-tekst) 45%, transparent); outline-offset: 10px; border-radius: 6px; }
 .adm-readonly::before {
-  content: '🔒 Redigeres på CV-siden'; position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+  content: '🔒 Redigeres et annet sted'; position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
   background: var(--adm-flate); color: var(--adm-tekst); font: 600 12px/1 system-ui, sans-serif;
   padding: 6px 12px; border-radius: 100px; white-space: nowrap; z-index: 5;
 }

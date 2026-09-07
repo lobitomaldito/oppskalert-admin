@@ -28,8 +28,9 @@ export default async function handler(req, res) {
     }
   }
 
-  // Base64 er 4 tegn per 3 byte. Maalt paa tegn ble det reelle taket 2,6 MB og
-  // ikke 3,5, og teksten talte ikke med i det hele tatt.
+  // Base64 er 4 tegn per 3 byte, saa lengden paa strengen maa regnes om til
+  // dekodede byte foer den maales mot taket. Talt paa tegn ble det reelle taket
+  // en tredjedel lavere enn det satte, og teksten talte ikke med i det hele tatt.
   const byte = (s) => Math.floor(String(s).length * 3 / 4);
   const stor = bilder.reduce((sum, b) => sum + byte(b.data), 0) + Buffer.byteLength(JSON.stringify(edits));
   if (stor > MAKS_PAYLOAD) {
@@ -80,7 +81,7 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(502).json({
       ok: false,
-      error: `Publiseringen naadde ikke fram til GitHub. Det du har skrevet ligger trygt i nettleseren, proev igjen om litt. Teknisk: ${String(e.message || e).slice(0, 120)}`
+      error: `Publiseringen naadde ikke fram til GitHub. Lukk ikke fanen: endringene dine ligger fortsatt paa siden, proev Publiser igjen om litt. Teknisk: ${String(e.message || e).slice(0, 120)}`
     });
   }
 }

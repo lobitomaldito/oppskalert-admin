@@ -4,6 +4,7 @@ import { join, extname, sep } from 'node:path';
 import { createServer } from 'node:http';
 import { build } from '../build/index.mjs';
 import { trygStI, trygSidenavn } from '../api/_stier.mjs';
+import { checkPin } from '../api/_rateLimit.mjs';
 import { kjor } from '../doctor/index.mjs';
 import { lesProsjekt } from './_les-prosjekt.mjs';
 
@@ -42,8 +43,8 @@ function init() {
   else if (!readFileSync(tokensFil, 'utf8').includes('--adm-aksent')) { appendFileSync(tokensFil, TOKENS); tokensEndret = true; }
   if (tokensEndret) console.log(`  skrev static/css/tokens.css`);
   console.log('\nTo ting du maa gjore selv:');
-  console.log('  1. Legg <link rel="stylesheet" href="/css/tokens.css"> i <head> i hver mal,');
-  console.log('     etter admin/edit.css. Uten den kjorer admin-baren paa fallbackfarger.');
+  console.log('  1. Legg <link rel="stylesheet" href="/css/tokens.css"> i <head> i hver mal.');
+  console.log('     Uten den kjorer admin-baren paa fallbackfarger.');
   console.log('  2. Sett ADMIN_PIN, GITHUB_REPO og GITHUB_TOKEN i Vercel.');
 }
 
@@ -98,7 +99,10 @@ function dev() {
         let kropp;
         try { kropp = JSON.parse(Buffer.concat(biter).toString()); }
         catch (e) { return svar(400, { ok: false, error: 'Kroppen er ikke gyldig JSON.' }); }
-        if (kropp.pin !== PIN) return svar(401, { ok: false, error: 'Feil PIN.' });
+        // Samme sperre som produksjon. Med en rein sammenligning ga 20 feil PIN
+        // 20 avslag og ingen sperre, paa en server som skriver filer i prosjektet.
+        const sjekk = checkPin(req, kropp.pin, PIN);
+        if (!sjekk.ok) return svar(sjekk.status, { ok: false, error: sjekk.error });
         if (req.url === '/api/verify-pin') return svar(200, { ok: true });
         if (!kropp.page || !kropp.edits) return svar(400, { ok: false, error: 'Mangler page eller edits' });
 
@@ -138,7 +142,9 @@ function dev() {
     }
     res.writeHead(200, { 'Content-Type': MIME[extname(fil)] || 'application/octet-stream' });
     res.end(readFileSync(fil));
-  }).listen(PORT, () => console.log(`Kjoerer paa http://localhost:${PORT} (PIN ${PIN})`));
+  // Verten er 127.0.0.1. Uten den lyttet dev-serveren paa hele nettet, og den
+  // skriver filer i prosjektet.
+  }).listen(PORT, '127.0.0.1', () => console.log(`Kjoerer paa http://localhost:${PORT} (PIN ${PIN})`));
 }
 
 const kommandoer = { init, doctor, tid, dev };

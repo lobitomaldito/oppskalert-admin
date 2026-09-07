@@ -1,7 +1,7 @@
 // test/save-stier.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { trygStI, MAKS_PAYLOAD } from '../api/_stier.mjs';
+import { trygStI, trygSidenavn, MAKS_PAYLOAD } from '../api/_stier.mjs';
 
 test('godtar en vanlig opplastingssti', () => {
   assert.equal(trygStI('static/assets/uploads/1757000000-bilde.jpg'), 'static/assets/uploads/1757000000-bilde.jpg');
@@ -41,6 +41,20 @@ test('avviser svg, som kan baere kjoerbart script paa kundens eget origin', () =
   assert.equal(trygStI('static/assets/uploads/logo.svg'), null);
 });
 
-test('grensen for én publisering er 3,5 MB', () => {
-  assert.equal(MAKS_PAYLOAD, 3.5 * 1024 * 1024);
+// Kroppen sendes som base64, fire tegn per tre byte. Med 3,5 MB dekodet ble den
+// 4,54 MB paa traaden, over Vercels grense paa 4,5, og plattformen avviste foer
+// handleren kjorte. Da naadde serverens egen 413-tekst aldri klienten.
+test('grensen for én publisering er 3,0 MB dekodet, saa kroppen holder seg under Vercels 4,5 MB', () => {
+  assert.equal(MAKS_PAYLOAD, 3.0 * 1024 * 1024);
+  assert.ok(MAKS_PAYLOAD * 4 / 3 < 4.5 * 1024 * 1024);
+});
+
+test('godtar et vanlig sidenavn', () => {
+  assert.equal(trygSidenavn('index'), 'index');
+  assert.equal(trygSidenavn('om-oss_2'), 'om-oss_2');
+});
+
+test('avviser et sidenavn over 100 tegn, som ga ufanget ENAMETOOLONG', () => {
+  assert.equal(trygSidenavn('a'.repeat(101)), null);
+  assert.equal(trygSidenavn('a'.repeat(100)), 'a'.repeat(100));
 });

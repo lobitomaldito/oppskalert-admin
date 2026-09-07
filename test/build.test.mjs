@@ -58,3 +58,20 @@ test('oedelagt json stopper ikke bygget', () => {
   assert.equal(res.sider, 1);
   assert.match(readFileSync(join(rot, 'dist', 'index.html'), 'utf8'), /Standard/);
 });
+
+test('publikumsstilen bakes inn, saa skjulte kort faktisk er skjult for besokende', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', 'index.html'), '<html><head><title>x</title></head><body><ul data-editable-list="k"><li data-list-item><h3 data-list-field="t">A</h3></li></ul></body></html>');
+  writeFileSync(join(rot, 'content', 'index.json'), JSON.stringify({ k: [{ t: 'skjult', _skjult: '1' }] }));
+  build({ rot });
+  const html = readFileSync(join(rot, 'dist', 'index.html'), 'utf8');
+  assert.match(html, /is-hidden-item\{display:none\}/);
+  assert.match(html, /class="[^"]*is-hidden-item/);
+});
+
+test('dist-mappa kan ikke vaere prosjektroten, som ville slettet kildefilene', () => {
+  const rot = lagProsjekt();
+  assert.throws(() => build({ rot, dist: '.' }), /kan ikke slettes/);
+  assert.ok(existsSync(join(rot, 'templates', 'index.html')));
+  assert.ok(existsSync(join(rot, 'content', 'index.json')));
+});
