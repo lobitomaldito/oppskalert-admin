@@ -38,7 +38,14 @@
     '.dm__back{margin-top:1.6rem;padding:.7rem 1.4rem;cursor:pointer;background:transparent;color:#da762b;font-weight:700;font-size:.9rem;border:1px solid #da762b;border-radius:100px}' +
     '.dm__back:hover{background:#da762b;color:#fff}' +
     'body.dm-open{overflow:hidden}' +
-    '[data-list-item].dm-clickable{cursor:pointer}[data-list-detail]{display:none}' +
+    '[data-list-item].dm-clickable{cursor:pointer}' +
+    // De to reglene under staar ogsaa inline i <head>, lagt dit av
+    // build/index.mjs. Den kopien er den som gjelder: laster ikke denne fila,
+    // faar hver besoekende hele detaljteksten til hvert kort dumpet rett inn i
+    // lista. Disse blir staaende som reserve for en side som lenker
+    // detail-modal.js uten aa gaa gjennom bygget. Identiske regler, saa de kan
+    // ikke komme i konflikt.
+    '[data-list-detail]{display:none}' +
     'body.adm-editing [data-list-detail]{display:block}' +
     '.galleri{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:1.4rem 0}' +
     '.galleri img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;display:block}' +

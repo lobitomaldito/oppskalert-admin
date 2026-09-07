@@ -85,13 +85,45 @@ function erPlassholder(tekst) {
   return REN_PLASSHOLDER.test(tekst);
 }
 
+// Markup som bare former teksten inni et avsnitt, aldri en egen blokk. Et
+// element som utelukkende har slike barn baerer fortsatt ett sammenhengende
+// stykke brodtekst, og skal telles som en bladnode. Uten dette hoppet
+// kontrollen over ethvert avsnitt med en lenke eller et fett ord i seg,
+// altsaa de fleste avsnittene paa en markedsside. Kalibreringen maalte bare
+// falske positive og saa derfor ikke hullet: det var en falsk negativ.
+const INLINE_TAGGER = new Set([
+  'strong', 'b', 'em', 'i', 'a', 'span', 'br', 'small',
+  'sup', 'sub', 'u', 's', 'mark', 'abbr', 'code', 'time', 'wbr'
+]);
+
+function erInline(el) {
+  return typeof el.tagName === 'string' && INLINE_TAGGER.has(el.tagName.toLowerCase());
+}
+
+// Bladnode: ingen element-barn i det hele tatt, eller bare inline-barn. Et
+// blokk-barn (p, div, ul, h1-h6, section, figure og alt annet utenfor
+// settet over) gjor elementet til en beholder, som foer.
+function erBladnode(el) {
+  for (const n of el.childNodes) {
+    if (n.nodeType !== NodeType.ELEMENT_NODE) continue;
+    if (!INLINE_TAGGER.has(n.tagName.toLowerCase())) return false;
+  }
+  return true;
+}
+
 export function bladnoder(html) {
   const rot = finnRot(html);
   const linje = linjeOppslag(html);
   const funn = [];
   for (const el of rot.querySelectorAll('*')) {
-    const barnElementer = el.childNodes.filter((n) => n.nodeType === NodeType.ELEMENT_NODE);
-    if (barnElementer.length > 0) continue;
+    if (!erBladnode(el)) continue;
+    // Uten denne vakten gir <p>Ring <a>1</a> i dag</p> to funn, ett paa p og
+    // ett paa a, for begge er bladnoder etter regelen over. Den ytterste
+    // bladnoden baerer hele teksten, saa inline-barnet melder ikke selv.
+    // Unntaket er et inline-element som ligger rett under rota: der finnes
+    // ingen ytre bladnode som kan melde det i stedet.
+    const forelder = el.parentNode;
+    if (erInline(el) && forelder && forelder !== rot && erBladnode(forelder)) continue;
     const tekst = (el.text || '').trim();
     if (!erInnhold(tekst)) continue;
     if (erPlassholder(tekst)) continue;

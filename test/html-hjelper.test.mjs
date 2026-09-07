@@ -40,6 +40,33 @@ test('bare bladnoder, en div med en p inni teller som p', () => {
   assert.deepEqual(n.map((x) => x.tagg), ['p']);
 });
 
+test('et avsnitt med fet tekst er fortsatt en bladnode', () => {
+  const n = bladnoder('<main><p>Vi tilbyr <strong>kurs</strong> i Oslo</p></main>');
+  assert.deepEqual(n.map((x) => x.tagg), ['p']);
+  assert.equal(n[0].tekst, 'Vi tilbyr kurs i Oslo');
+});
+
+test('en lenke inne i et avsnitt gir ett funn paa p, ikke ogsaa ett paa a', () => {
+  const n = bladnoder('<main><p>Ring <a href="tel:1">1</a> i dag</p></main>');
+  assert.deepEqual(n.map((x) => x.tagg), ['p']);
+});
+
+test('br deler ikke avsnittet i to bladnoder', () => {
+  assert.deepEqual(bladnoder('<main><p>Linje ein<br>Linje to</p></main>').map((x) => x.tagg), ['p']);
+});
+
+test('en overskrift pakket i span meldes som overskriften', () => {
+  assert.deepEqual(bladnoder('<main><h2><span>Overskrift</span></h2></main>').map((x) => x.tagg), ['h2']);
+});
+
+test('et blokk-barn gjor elementet til beholder, som foer', () => {
+  assert.deepEqual(bladnoder('<main><div><p>Tekst her</p><p>Mer tekst</p></div></main>').map((x) => x.tagg), ['p', 'p']);
+});
+
+test('en inline-node rett under rota melder seg selv, ingen ytre bladnode finnes', () => {
+  assert.deepEqual(bladnoder('<main><a href="/x">Les mer</a></main>').map((x) => x.tagg), ['a']);
+});
+
 test('tomme noder og rene dekortegn hoppes over', () => {
   assert.equal(bladnoder('<main><p></p><p>  </p><p>•</p><p>→</p></main>').length, 0);
 });

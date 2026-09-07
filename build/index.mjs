@@ -13,7 +13,18 @@ const EDITOR = fileURLToPath(new URL('../editor/', import.meta.url));
 // bare definert i editor/edit.css, som bare en verifisert admin faar lastet.
 // Uten dem ser klienten et kort som skjult hos seg selv mens alle besokende ser
 // det. Inline i head er den ene formen som ikke kan glemmes.
-const PUBLIKUMSSTIL = '<style>.is-hidden-item{display:none}.txt-lg{font-size:1.25em}.txt-sm{font-size:0.85em}</style>';
+//
+// [data-list-detail] hoerer til samme klasse feil. Detaljblokken er den lange
+// teksten bak et kort, og skal bare vises i overlegget som detail-modal.js
+// aapner. La den regelen ligge i detail-modal.js, holdt den bare saa lenge
+// scriptet faktisk kjoerte: en 404, en blokkert script-tag eller en relativ
+// sti fra en undermappe-mal ga hver besoekende hele detaljteksten til hvert
+// kort dumpet rett inn i lista. Inline i head virker foer forste maling, saa
+// den rekker heller ikke aa blinke mens den deferrede scripten laster.
+// body.adm-editing slaar den paa igjen for admin, som skal se og redigere
+// detaljteksten i sidefloten.
+const PUBLIKUMSSTIL = '<style>.is-hidden-item{display:none}.txt-lg{font-size:1.25em}.txt-sm{font-size:0.85em}' +
+  '[data-list-detail]{display:none}body.adm-editing [data-list-detail]{display:block}</style>';
 
 export function build(config = {}) {
   const rot = config.rot || process.cwd();

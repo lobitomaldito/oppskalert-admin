@@ -81,6 +81,19 @@ test('publikumsstilen bakes inn, saa skjulte kort faktisk er skjult for besokend
   assert.match(html, /class="[^"]*is-hidden-item/);
 });
 
+test('detaljblokkene skjules av den inline stilen, ikke av detail-modal.js', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', 'index.html'), '<html><head><title>x</title></head><body><ul data-editable-list="k"><li data-list-item><h3 data-list-field="t">A</h3><div data-list-detail>Lang tekst</div></li></ul></body></html>');
+  build({ rot });
+  const html = readFileSync(join(rot, 'dist', 'index.html'), 'utf8');
+  // Uten denne regelen i <head> faar hver besoekende hele detaljteksten dumpet
+  // rett inn i lista den dagen detail-modal.js ikke laster.
+  assert.match(html, /\[data-list-detail\]\{display:none\}/);
+  assert.match(html, /body\.adm-editing \[data-list-detail\]\{display:block\}/);
+  // Regelen maa staa i dokumentets egen head, ikke i en fil siden laster.
+  assert.ok(html.indexOf('[data-list-detail]{display:none}') < html.indexOf('</head>'));
+});
+
 test('dist-mappa kan ikke vaere prosjektroten, som ville slettet kildefilene', () => {
   const rot = lagProsjekt();
   assert.throws(() => build({ rot, dist: '.' }), /kan ikke slettes/);

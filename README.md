@@ -57,14 +57,14 @@ I hver mal under `templates/`:
 ```html
 <body data-page-key="index">
   ...
-  <script src="admin/edit.js" defer></script>
+  <script src="/admin/edit.js" defer></script>
 </body>
 ```
 
 `data-page-key` avgjør hvilken `content/<side>.json` siden leser og skriver.
 Uten den starter editoren ikke.
 
-**Ikke lenk `admin/edit.css` i `<head>`.** `edit.js` injiserer stilarket selv
+**Ikke lenk `/admin/edit.css` i `<head>`.** `edit.js` injiserer stilarket selv
 når en verifisert admin er inne. Lenkes det i malen også, laster hver
 besøkende 14,7 kB CSS de aldri bruker.
 
@@ -233,7 +233,7 @@ To valgfrie filer i `editor/`, kopiert til `dist/admin/` av bygget som
 ### Detaljvisning
 
 ```html
-<script src="admin/detail-modal.js" defer></script>
+<script src="/admin/detail-modal.js" defer></script>
 ```
 
 Klikk på et `[data-list-item]` som inneholder `[data-list-detail]` åpner et
@@ -249,12 +249,14 @@ arver overlegget kortets utsnitt.
 ### Kollaps
 
 ```html
-<script src="admin/kollaps.js" defer></script>
+<script src="/admin/kollaps.js" defer></script>
 ```
 
 `data-collapsible="N"` på en liste-beholder viser de første N
-`[data-list-item]` for besøkende, med en «Se X til»-knapp for resten.
-`data-collapsible-noun` styrer ordet i knappeteksten. Admin ser alltid alle
+`[data-list-item]` for besøkende, med en «Vis 5 forestillinger til»-knapp for
+resten. Tallet er antallet skjulte elementer, ordet kommer fra
+`data-collapsible-noun`. Uten det attributtet står det bare «Vis 5 til».
+Utvidet bytter knappen til «Vis færre». Admin ser alltid alle
 elementene, uten kollaps.
 
 ## Kjente begrensninger
