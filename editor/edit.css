@@ -1,1 +1,266 @@
-/* fylles i Task 9 */
+/* Admin-UI. Fargene er sidens egne: en side som setter --adm-* i sin :root
+   faar en admin-bar som hoerer hjemme i designet. Fallbackene under er
+   noeytrale med vilje, saa en side som glemmer aa sette dem faar en brukbar
+   bar i stedet for en usynlig. */
+:root {
+  --adm-aksent: #3d6be0;
+  --adm-flate:  #1c1b1a;
+  --adm-tekst:  #f5f4f2;
+  --adm-fare:   #c0392b;
+  --adm-ok:     #3f9f6b;
+}
+
+/* Admin editor UI, only ever shown to a logged-in admin */
+.adm {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  z-index: 99999; display: flex; align-items: center; gap: 10px;
+  padding: 8px 8px 8px 16px; border-radius: 100px;
+  background: color-mix(in srgb, var(--adm-flate) 92%, transparent); color: var(--adm-tekst);
+  font-family: system-ui, -apple-system, sans-serif; font-size: 14px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.35); backdrop-filter: blur(12px);
+}
+.adm__tag { font-weight: 700; letter-spacing: 0.02em; opacity: 0.9; }
+.adm__btn {
+  border: 0; cursor: pointer; border-radius: 100px;
+  padding: 8px 16px; font-size: 13px; font-weight: 700;
+  background: color-mix(in srgb, var(--adm-tekst) 14%, transparent); color: var(--adm-tekst); transition: all .2s;
+}
+.adm__btn:hover { background: color-mix(in srgb, var(--adm-tekst) 24%, transparent); }
+.adm__btn--primary { background: var(--adm-aksent); color: white; }
+.adm__btn--primary:hover { background: color-mix(in srgb, var(--adm-aksent) 85%, white); }
+.adm__btn--primary:disabled { opacity: 0.5; cursor: default; }
+.adm__btn--ghost { background: transparent; opacity: 0.7; font-weight: 500; }
+.adm__status { font-size: 13px; opacity: 0.85; min-width: 10px; }
+
+/* Editable fields get a subtle dashed outline in edit mode */
+.adm-editable {
+  outline: 2px dashed color-mix(in srgb, var(--adm-aksent) 70%, transparent); outline-offset: 4px;
+  border-radius: 3px; cursor: text; transition: outline-color .2s;
+}
+.adm-editable:hover { outline-color: var(--adm-aksent); }
+.adm-editable:focus { outline-style: solid; background: color-mix(in srgb, var(--adm-aksent) 6%, transparent); }
+
+/* Swappable images in edit mode */
+.adm-image { position: relative; cursor: pointer; outline: 2px dashed color-mix(in srgb, var(--adm-aksent) 70%, transparent); outline-offset: 4px; }
+.adm-image:hover { outline-style: solid; outline-color: var(--adm-aksent); }
+.adm-image::after {
+  content: '↑ Bytt bilde'; position: absolute; top: 8px; left: 8px; z-index: 5;
+  background: color-mix(in srgb, var(--adm-flate) 88%, transparent); color: var(--adm-tekst); font: 700 12px/1 system-ui, sans-serif;
+  padding: 6px 10px; border-radius: 100px; pointer-events: none; opacity: 0; transition: opacity .2s;
+}
+.adm-image:hover::after { opacity: 1; }
+
+/* Image fields sitting behind an overlay or inside a link (e.g. the front-page
+   "doors"). The whole wrapper becomes the click target, with an always-on badge. */
+.adm-image-hit { position: relative; cursor: pointer; outline: 3px dashed color-mix(in srgb, var(--adm-aksent) 85%, transparent); outline-offset: -3px; }
+.adm-image-hit::after {
+  content: '↑ Bytt bilde'; position: absolute; top: 12px; left: 12px; z-index: 6;
+  background: color-mix(in srgb, var(--adm-flate) 90%, transparent); color: var(--adm-tekst); font: 700 13px/1 system-ui, sans-serif;
+  padding: 8px 12px; border-radius: 100px; pointer-events: none;
+}
+
+/* Images inside editable rich content (e.g. galleries in a "Les mer" detail)
+   are swappable too: click to upload a replacement. */
+body.adm-editing [data-list-detail] img,
+body.adm-editing [contenteditable="true"] img {
+  cursor: pointer; outline: 2px dashed color-mix(in srgb, var(--adm-aksent) 70%, transparent); outline-offset: 2px; transition: outline-color .2s;
+}
+body.adm-editing [data-list-detail] img:hover,
+body.adm-editing [contenteditable="true"] img:hover { outline-style: solid; outline-color: var(--adm-aksent); }
+
+/* Floating swap/delete menu for images inside editable rich content. */
+.adm-imgmenu {
+  position: absolute; z-index: 100000; display: flex; gap: 4px;
+  background: color-mix(in srgb, var(--adm-flate) 95%, transparent); padding: 5px; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.adm-imgmenu button {
+  border: 0; background: color-mix(in srgb, var(--adm-tekst) 10%, transparent); color: var(--adm-tekst); cursor: pointer;
+  font: 700 12px/1 system-ui, sans-serif; padding: 8px 11px; border-radius: 7px; white-space: nowrap;
+}
+.adm-imgmenu button:hover { background: color-mix(in srgb, var(--adm-tekst) 22%, transparent); }
+.adm-imgmenu button[data-ia="del"]:hover { background: var(--adm-fare); }
+
+/* Repositioning a cropped image: drag it to choose which part survives the crop.
+   touch-action:none so a drag on a phone moves the photo instead of the page.
+   Only ever set on the one image being positioned, so scrolling stays normal. */
+.adm-posing, .adm-posing:hover {
+  cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none;
+  outline: 3px solid var(--adm-ok); outline-offset: -3px;
+}
+.adm-posing.is-dragging { cursor: grabbing; }
+
+/* The photo at the top of an open "Les mer" modal: clicking it goes straight into
+   drag mode, so it needs its own affordance (the card's badge isn't visible here). */
+body.adm-editing .prod-modal__media, body.adm-editing .dm__media { position: relative; cursor: pointer; }
+body.adm-editing .prod-modal__media::after, body.adm-editing .dm__media::after {
+  content: '✥ Klikk for å flytte utsnitt'; position: absolute; top: 10px; left: 10px; z-index: 3;
+  background: color-mix(in srgb, var(--adm-flate) 88%, transparent); color: var(--adm-tekst); font: 700 12px/1 system-ui, sans-serif;
+  padding: 7px 11px; border-radius: 100px; pointer-events: none;
+}
+body.adm-editing .prod-modal__media:has(.adm-posing)::after,
+body.adm-editing .dm__media:has(.adm-posing)::after { display: none; }
+.adm-posbar__hint {
+  display: flex; align-items: center; padding: 0 6px 0 8px;
+  color: var(--adm-tekst); font: 700 12px/1 system-ui, sans-serif; white-space: nowrap; opacity: 0.85;
+}
+.adm-posbar button[data-pa="done"] { background: var(--adm-ok); }
+.adm-posbar button[data-pa="done"]:hover { background: color-mix(in srgb, var(--adm-ok) 85%, white); }
+
+/* "+ Bilde" add-tile inside a gallery (edit mode). Sits as the next grid cell;
+   stripped from the saved HTML so it never reaches visitors. */
+.galleri .adm-gallery-add {
+  width: 100%; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;
+  border: 2px dashed color-mix(in srgb, var(--adm-aksent) 60%, transparent); background: color-mix(in srgb, var(--adm-aksent) 8%, transparent);
+  color: var(--adm-aksent); border-radius: 10px; cursor: pointer;
+  font: 700 14px/1 system-ui, sans-serif; transition: background .2s, border-color .2s;
+}
+.galleri .adm-gallery-add:hover { background: color-mix(in srgb, var(--adm-aksent) 16%, transparent); border-color: var(--adm-aksent); }
+
+/* A mirrored section (read-only copy of another page's content, e.g. the full
+   CV on Om). Marked clearly so the admin knows where to edit it. */
+.adm-readonly { position: relative; outline: 2px dashed color-mix(in srgb, var(--adm-tekst) 45%, transparent); outline-offset: 10px; border-radius: 6px; }
+.adm-readonly::before {
+  content: '🔒 Redigeres på CV-siden'; position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+  background: var(--adm-flate); color: var(--adm-tekst); font: 600 12px/1 system-ui, sans-serif;
+  padding: 6px 12px; border-radius: 100px; white-space: nowrap; z-index: 5;
+}
+
+/* List editing: delete button on each item */
+.adm-list__del {
+  position: absolute; top: 8px; right: 8px; z-index: 10;
+  width: 28px; height: 28px; border: 0; border-radius: 50%;
+  background: color-mix(in srgb, var(--adm-flate) 82%, transparent); color: var(--adm-tekst);
+  font-size: 18px; line-height: 1; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .15s;
+  backdrop-filter: blur(4px);
+}
+[data-list-item]:hover .adm-list__del { opacity: 1; }
+.adm-list__del:hover { background: var(--adm-fare); }
+
+/* Add-item button, sits directly after the list container */
+.adm-list__add {
+  display: block; margin: 16px auto 0;
+  background: color-mix(in srgb, var(--adm-aksent) 15%, transparent) !important; border: 2px dashed color-mix(in srgb, var(--adm-aksent) 60%, transparent);
+  color: var(--adm-aksent) !important; font-size: 14px !important;
+  border-radius: 8px !important; padding: 10px 24px !important;
+  width: 100%; max-width: 280px; text-align: center;
+}
+.adm-list__add:hover { background: color-mix(in srgb, var(--adm-aksent) 25%, transparent) !important; border-color: var(--adm-aksent); }
+
+/* Per-item control bar (move up/down, hide/show, delete) */
+.adm-list__ctrl {
+  position: absolute; top: 8px; right: 8px; z-index: 12;
+  display: flex; gap: 4px; opacity: 0; transition: opacity .15s;
+}
+[data-list-item]:hover > .adm-list__ctrl,
+[data-list-item]:focus-within > .adm-list__ctrl { opacity: 1; }
+.adm-list__ctrl button {
+  width: 28px; height: 28px; border: 0; border-radius: 6px; cursor: pointer;
+  background: color-mix(in srgb, var(--adm-flate) 86%, transparent); color: var(--adm-tekst); font-size: 15px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+}
+.adm-list__ctrl button:hover { background: var(--adm-aksent); }
+.adm-list__ctrl button[data-a="del"]:hover { background: var(--adm-fare); }
+
+/* Public-facing base rules (edit.css loads on every page, so these apply to visitors too):
+   hidden list items and empty image slots are invisible to visitors. */
+.is-hidden-item { display: none; }
+img[data-list-image-field]:not([src]), img[data-list-image-field][src=""],
+img[data-edit-image]:not([src]),  img[data-edit-image][src=""] { display: none; }
+
+/* Hidden items: revealed (dimmed) while editing so the admin can re-activate them */
+body.adm-editing .is-hidden-item {
+  display: block !important; opacity: 0.5; position: relative;
+  outline: 2px dashed color-mix(in srgb, var(--adm-aksent) 60%, transparent); outline-offset: 3px;
+}
+body.adm-editing .is-hidden-item::before {
+  content: 'SKJULT: vises ikke for besøkende'; position: absolute; top: 6px; left: 8px; z-index: 11;
+  background: color-mix(in srgb, var(--adm-flate) 85%, transparent); color: var(--adm-aksent); font: 700 10px/1 system-ui, sans-serif;
+  padding: 5px 8px; border-radius: 5px; letter-spacing: 0.04em;
+}
+
+/* Empty image fields: show a clickable placeholder only while editing */
+body.adm-editing img[data-list-image-field]:not([src]),
+body.adm-editing img[data-list-image-field][src=""],
+body.adm-editing img[data-edit-image]:not([src]),
+body.adm-editing img[data-edit-image][src=""] {
+  display: block !important; min-height: 90px; width: 100%;
+  background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--adm-aksent) 8%, transparent), color-mix(in srgb, var(--adm-aksent) 8%, transparent) 10px, color-mix(in srgb, var(--adm-aksent) 16%, transparent) 10px, color-mix(in srgb, var(--adm-aksent) 16%, transparent) 20px);
+}
+
+/* List-item detail blocks, hidden for visitors, revealed in edit mode so the
+   admin can edit the "expanded info" that shows when a card is clicked. */
+body.adm-editing [data-list-detail] {
+  display: block !important;
+  margin-top: 14px; padding: 14px 16px;
+  background: color-mix(in srgb, var(--adm-aksent) 6%, transparent); border: 1px dashed color-mix(in srgb, var(--adm-aksent) 50%, transparent);
+  border-radius: 8px;
+}
+body.adm-editing [data-list-detail]::before {
+  content: '▼ Vises når besøkende klikker på kortet'; display: block;
+  font: 700 11px/1 system-ui, sans-serif; letter-spacing: 0.04em;
+  color: var(--adm-aksent); opacity: 0.85; margin-bottom: 10px; text-transform: uppercase;
+}
+
+/* Empty photo-credit fields (cover photo + gallery images + standalone images)
+   are invisible to visitors but revealed with a placeholder while editing. */
+body.adm-editing .prod-card__foto:empty,
+body.adm-editing .galleri__credit:empty,
+body.adm-editing .media-credit:empty {
+  display: block; min-height: 1.2em;
+}
+body.adm-editing .prod-card__foto:empty::before,
+body.adm-editing .galleri__credit:empty::before,
+body.adm-editing .media-credit:empty::before {
+  content: attr(data-placeholder); opacity: 0.45; font-style: italic;
+}
+/* The standalone-image credit is click-through for visitors so it can never
+   block the image-swap target, but it must be clickable to edit its text. */
+body.adm-editing .media-credit { pointer-events: auto; }
+
+/* Floating format toolbar (bold / italic / clear) */
+.adm-fmt {
+  position: absolute; z-index: 100000; display: flex; gap: 2px;
+  background: color-mix(in srgb, var(--adm-flate) 96%, transparent); border-radius: 8px; padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45); backdrop-filter: blur(6px);
+}
+.adm-fmt button {
+  width: 30px; height: 30px; border: 0; border-radius: 5px; cursor: pointer;
+  background: transparent; color: var(--adm-tekst); font-size: 15px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.adm-fmt button:hover { background: color-mix(in srgb, var(--adm-tekst) 18%, transparent); }
+
+/* Predefined text-size steps applied via the toolbar (A− / A+) */
+.txt-lg { font-size: 1.25em; }
+.txt-sm { font-size: 0.85em; }
+
+/* Publish modal */
+.adm-modal {
+  position: fixed; inset: 0; z-index: 999999;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(6px);
+}
+.adm-modal__box {
+  background: color-mix(in srgb, var(--adm-flate) 97%, transparent); color: var(--adm-tekst);
+  border-radius: 16px; padding: 32px 36px; max-width: 340px; width: 90%;
+  text-align: center; font-family: system-ui, -apple-system, sans-serif;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+}
+.adm-modal__icon { font-size: 30px; margin-bottom: 10px; }
+.adm-modal__title { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+.adm-modal__desc { font-size: 13px; opacity: 0.68; line-height: 1.55; margin-bottom: 18px; }
+.adm-modal__timer { font-size: 13px; opacity: 0.85; margin-bottom: 14px; }
+.adm-modal__bar {
+  height: 4px; background: color-mix(in srgb, var(--adm-tekst) 12%, transparent); border-radius: 2px; margin-bottom: 22px;
+}
+.adm-modal__fill { height: 100%; background: var(--adm-aksent); border-radius: 2px; width: 0%; }
+.adm-modal__btns { display: flex; gap: 10px; justify-content: center; }
+
+/* Footer login/logout link */
+.footer__admin-link {
+  font-size: 11px; opacity: 0.38; color: inherit; text-decoration: none; transition: opacity .2s;
+}
+.footer__admin-link:hover { opacity: 0.75; }
