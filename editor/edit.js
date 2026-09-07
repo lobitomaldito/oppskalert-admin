@@ -10,13 +10,6 @@
   var pageKey = document.body.getAttribute('data-page-key');
   if (!pageKey) return;
 
-  // Chat-assistenten er av med mindre siden ber om den. Den koster et
-  // /api/chat-endepunkt og en API-noekkel, og de fleste kundesider trenger
-  // den ikke. Siden slaar den paa med <body data-admin-chat>. hasAttribute og
-  // ikke getAttribute: et attributt uten verdi leser som tom streng, og en tom
-  // streng er falsy, saa getAttribute ville skrudd bryteren av igjen.
-  var CHAT_PAA = document.body.hasAttribute('data-admin-chat');
-
   // Verifies a PIN against /api/verify-pin, behind the same rate limiter as
   // save (5 wrong guesses from one IP -> 15 min lockout).
   // The editor is never built for an unverified PIN, so guessing or forging
@@ -238,7 +231,6 @@
     '<span class="adm__tag">✎ Admin</span>' +
     '<button class="adm__btn" data-act="toggle">Rediger</button>' +
     '<button class="adm__btn" data-act="undo" hidden title="Angre siste endring (Cmd/Ctrl+Z)">↶ Angre</button>' +
-    '<button class="adm__btn" data-act="chat" hidden title="Spør AI-assistenten">💬 Assistent</button>' +
     '<button class="adm__btn adm__btn--primary" data-act="publish" hidden>Publiser</button>' +
     '<span class="adm__status"></span>' +
     '<button class="adm__btn adm__btn--ghost" data-act="logout">Logg ut</button>';
@@ -259,11 +251,15 @@
   var publishBtn = bar.querySelector('[data-act="publish"]');
   var toggleBtn  = bar.querySelector('[data-act="toggle"]');
   var undoBtn    = bar.querySelector('[data-act="undo"]');
-  var chatBtn    = bar.querySelector('[data-act="chat"]');
 
   // Single hidden file-input reused for all uploads
   var fileInput = document.createElement('input');
-  fileInput.type = 'file'; fileInput.accept = 'image/*'; fileInput.style.display = 'none';
+  fileInput.type = 'file';
+  // Bare de fire formatene serveren godtar. 'image/*' slapp inn svg, heic, bmp,
+  // avif og tiff, og en IMG_9876.HEIC rett fra en iPhone ble foerst avvist ved
+  // publisering.
+  fileInput.accept = '.jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif';
+  fileInput.style.display = 'none';
   document.body.appendChild(fileInput);
   var pendingEl = null, pendingAddGalleri = null, MAX_GALLERI = 6;
   fileInput.addEventListener('change', function () {
@@ -324,15 +320,26 @@
   // into and left empty can pick up a stray <br> from the browser).
   function cleanFieldHtml(el) {
     if (!el.querySelector('.adm-gallery-add') && !el.querySelector('.galleri__credit') &&
-        !el.querySelector('img[data-img-url]')) return el.innerHTML;
+        !el.querySelector('[data-img-url]')) return el.innerHTML;
     var c = el.cloneNode(true);
     c.querySelectorAll('.adm-gallery-add').forEach(function (n) { n.remove(); });
     c.querySelectorAll('.galleri__credit').forEach(function (n) { if (!n.textContent.trim()) n.innerHTML = ''; });
-    // Et ventende bilde viser data-URL-en i src og baerer den endelige stien i
+    // Et ventende bilde viser data-URL-en og baerer den endelige stien i
     // data-img-url. Her byttes den tilbake, saa innholdet som publiseres peker
-    // paa fila og ikke paa en base64-streng.
-    c.querySelectorAll('img[data-img-url]').forEach(function (n) {
-      n.setAttribute('src', n.getAttribute('data-img-url'));
+    // paa fila og ikke paa en base64-streng. Gjelder begge formene applyImage
+    // skriver: src paa en <img>, og background-image paa alt annet. Uten den
+    // andre ville en div med bakgrunnsbilde inne i et rikt felt baaret hele
+    // base64-strengen inn i content/<side>.json.
+    c.querySelectorAll('[data-img-url]').forEach(function (n) {
+      var sti = n.getAttribute('data-img-url');
+      if (n.tagName === 'IMG') {
+        n.setAttribute('src', sti);
+      } else {
+        // Bare url(...) byttes, saa oevrige deklarasjoner blir staaende, blant
+        // dem background-position fra "Flytt utsnitt".
+        var stil = n.getAttribute('style') || '';
+        n.setAttribute('style', stil.replace(/url\(["']?[^"')]*["']?\)/, "url('" + sti + "')"));
+      }
       n.removeAttribute('data-img-url');
     });
     return c.innerHTML;
@@ -367,7 +374,10 @@
     var snap = captureState();
     if (undoStack.length && undoStack[undoStack.length - 1] === snap) return; // no change
     undoStack.push(snap);
-    if (undoStack.length > MAX_UNDO) undoStack.shift();
+    // Med ventende bilder ligger data-URL-ene i hvert snapshot. 50 av dem er
+    // hundrevis av MB strenger, nok til aa drepe en fane paa mobil.
+    var tak = ventendeBilder.length ? 12 : MAX_UNDO;
+    while (undoStack.length > tak) undoStack.shift();
     refreshUndoBtn();
   }
   function refreshUndoBtn() { if (undoBtn) { undoBtn.hidden = !editing; undoBtn.disabled = undoStack.length === 0; } }
@@ -426,8 +436,6 @@
     });
     toggleBtn.textContent = on ? 'Avslutt' : 'Rediger';
     publishBtn.hidden = !on;
-    chatBtn.hidden = !on || !CHAT_PAA;
-    if (!on) closeChat();
     refreshUndoBtn();
     status.textContent = on ? 'Klikk i teksten eller på et bilde for å bytte …' : '';
   }
@@ -516,9 +524,34 @@
     }
   }
 
-  // data: optional {field: html} to prefill the new item (used by the chat assistant).
-  // skipSnapshot: the chat assistant takes its own single snapshot for a whole batch
-  // of ops, so a per-item snapshot here would only let "Angre" undo the last op.
+  // Strip everything except the small inline set the site's CSS actually styles
+  // (see gotcha #2 in the skill: <b>/<i> from execCommand are normalised on
+  // publish, but here we go straight to the semantic tags since this never
+  // passes through the format toolbar).
+  function sanitizeInline(html) {
+    var div = document.createElement('div');
+    div.innerHTML = String(html == null ? '' : html);
+    (function clean(node) {
+      [].slice.call(node.childNodes).forEach(function (n) {
+        if (n.nodeType === 8) { node.removeChild(n); return; } // comments
+        if (n.nodeType !== 1) return;
+        var tag = n.tagName.toLowerCase();
+        if (['strong', 'em', 'br'].indexOf(tag) === -1) {
+          while (n.firstChild) n.parentNode.insertBefore(n.firstChild, n);
+          n.parentNode.removeChild(n);
+          return;
+        }
+        [].slice.call(n.attributes).forEach(function (a) { n.removeAttribute(a.name); });
+        clean(n);
+      });
+    })(div);
+    return div.innerHTML;
+  }
+
+  // data: optional {field: html} to prefill the new item, in place of the empty
+  // fields a hand-added item starts with.
+  // skipSnapshot: for a caller that snapshots a whole batch of ops itself, where a
+  // per-item snapshot would make "Angre" revert only the last one.
   function addListItem(container, data, skipSnapshot) {
     var existing = [].slice.call(container.querySelectorAll('[data-list-item]'));
     if (!existing.length) return;
@@ -539,7 +572,7 @@
     container.appendChild(clone);
     activateItem(container, clone, true);
     clone.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    if (data) return; // chat-filled item, don't steal focus into it
+    if (data) return; // prefilled item, don't steal focus into it
     var firstField = clone.querySelector('[data-list-field]');
     if (firstField) { skipFocusSnap = true; firstField.focus(); }
   }
@@ -609,11 +642,35 @@
   // aldri i repoet.
   var ventendeBilder = [];
 
+  // Serveren tar 3,5 MB per publisering. Base64 er 4 tegn per 3 byte.
+  // Klienten teller selv, saa den slipper aa oppdage taket foerst ved Publiser,
+  // der beskjeden ber om noe UI-et ikke kan gjore.
+  var MAKS_KOE = 3.5 * 1024 * 1024;
+  function koeStorrelse() {
+    var sum = 0;
+    for (var i = 0; i < ventendeBilder.length; i++) {
+      sum += Math.floor(String(ventendeBilder[i].data).length * 3 / 4);
+    }
+    return sum;
+  }
+
   function uploadImage(file, el, onUrl) {
     status.textContent = 'Behandler bilde …';
     prepImage(file, function (data, navn) {
       var trygtNavn = navn.replace(/[^a-zA-Z0-9._-]/g, '_');
-      var filnavn = Date.now() + '-' + trygtNavn;
+      // Samme endelsessjekk som serveren gjoer. Uten den blir en heic eller en
+      // svg liggende i koeen og gi 400 ved hver eneste Publiser, og den eneste
+      // veien ut er aa laste siden paa nytt og miste alle tekstendringene.
+      var filnavn = Date.now() + '-' + trygtNavn.replace(/\.{2,}/g, '.');
+      if (!/\.(jpe?g|png|webp|gif)$/i.test(filnavn)) {
+        status.textContent = '✗ Formatet støttes ikke. Bruk jpg, png, webp eller gif.';
+        return;
+      }
+      var nyStorrelse = koeStorrelse() + Math.floor(String(data).length * 3 / 4);
+      if (nyStorrelse > MAKS_KOE) {
+        status.textContent = '✗ For mange bilder på én gang. Trykk Publiser først, så legger du til resten etterpå.';
+        return;
+      }
       var url = '/assets/uploads/' + filnavn;
 
       ventendeBilder.push({ sti: 'static/assets/uploads/' + filnavn, data: data });
@@ -624,7 +681,11 @@
       // publisering, og den peker paa fila commit-et legger igjen.
       if (onUrl) { onUrl(url, data); }
       else { applyImage(el, data); el.setAttribute('data-img-url', url); }
-      status.textContent = '✓ Bilde klart. Husk å Publisere.';
+      if (koeStorrelse() > MAKS_KOE * 0.8) {
+        status.textContent = '✓ Bilde klart. Køen er nesten full, trykk Publiser snart.';
+      } else {
+        status.textContent = '✓ Bilde klart. Husk å Publisere.';
+      }
     });
   }
 
@@ -790,228 +851,12 @@
   });
 
   // -------------------------------------------------------
-  //  CHAT ASSISTANT: natural-language edits via Claude
-  // -------------------------------------------------------
-  // The assistant only ever PROPOSES edits (op/key/value shape below); nothing
-  // touches the DOM until the admin clicks "Bruk endringene" on that specific
-  // proposal, and every applied batch is one pushUndo() snapshot so "↶ Angre"
-  // reverts the whole thing in one click. Publishing stays a fully separate,
-  // manual step (publish() below), and the assistant never calls /api/save.
-  var chatHistory = []; // [{role:'user'|'assistant', text}], plain text only, sent back for follow-ups
-  var chatPanel = null, chatLog = null, chatForm = null, chatInput = null, chatSending = false;
-
-  // Strip everything except the small inline set the site's CSS actually styles
-  // (see gotcha #2 in the skill: <b>/<i> from execCommand are normalised on
-  // publish, but here we go straight to the semantic tags since this never
-  // passes through the format toolbar).
-  function sanitizeInline(html) {
-    var div = document.createElement('div');
-    div.innerHTML = String(html == null ? '' : html);
-    (function clean(node) {
-      [].slice.call(node.childNodes).forEach(function (n) {
-        if (n.nodeType === 8) { node.removeChild(n); return; } // comments
-        if (n.nodeType !== 1) return;
-        var tag = n.tagName.toLowerCase();
-        if (['strong', 'em', 'br'].indexOf(tag) === -1) {
-          while (n.firstChild) n.parentNode.insertBefore(n.firstChild, n);
-          n.parentNode.removeChild(n);
-          return;
-        }
-        [].slice.call(n.attributes).forEach(function (a) { n.removeAttribute(a.name); });
-        clean(n);
-      });
-    })(div);
-    return div.innerHTML;
-  }
-
-  // What the assistant is allowed to see and edit: every data-edit text field and
-  // every data-editable-list, by current value. Images are deliberately excluded:
-  // the assistant can never touch them (no upload channel), and it's told so.
-  function buildChatContext() {
-    var ctx = {};
-    textFields.forEach(function (el) {
-      var html = normalizeHtml(cleanFieldHtml(el).trim());
-      ctx[el.getAttribute('data-edit')] = { type: 'text', value: fieldIsEmpty(html) ? '' : html };
-    });
-    listContainers.forEach(function (c) {
-      var key = c.getAttribute('data-editable-list');
-      var items = [].slice.call(c.querySelectorAll('[data-list-item]')).map(function (item) {
-        var obj = {};
-        [].slice.call(item.querySelectorAll('[data-list-field]')).forEach(function (el) {
-          var html = normalizeHtml(cleanFieldHtml(el).trim());
-          obj[el.getAttribute('data-list-field')] = fieldIsEmpty(html) ? '' : html;
-        });
-        return obj;
-      });
-      ctx[key] = { type: 'list', items: items };
-    });
-    return ctx;
-  }
-
-  function ensureChatPanel() {
-    if (chatPanel || !CHAT_PAA) return;
-    chatPanel = document.createElement('div');
-    chatPanel.className = 'adm-chat';
-    chatPanel.hidden = true;
-    chatPanel.innerHTML =
-      '<div class="adm-chat__head">' +
-        '<span>💬 AI-assistent</span>' +
-        '<button type="button" class="adm-chat__close" title="Lukk">✕</button>' +
-      '</div>' +
-      '<div class="adm-chat__hint">Forklar hva du vil endre. Foreslåtte endringer må godkjennes før de brukes, og ingenting publiseres uten at du trykker Publiser.</div>' +
-      '<div class="adm-chat__log"></div>' +
-      '<form class="adm-chat__form">' +
-        '<textarea class="adm-chat__input" rows="2" placeholder="F.eks. «Gjør ingressen litt kortere» …"></textarea>' +
-        '<button type="submit" class="adm__btn adm__btn--primary">Send</button>' +
-      '</form>';
-    document.body.appendChild(chatPanel);
-    chatLog = chatPanel.querySelector('.adm-chat__log');
-    chatForm = chatPanel.querySelector('.adm-chat__form');
-    chatInput = chatPanel.querySelector('.adm-chat__input');
-    chatPanel.querySelector('.adm-chat__close').addEventListener('click', closeChat);
-    chatForm.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var text = chatInput.value.trim();
-      if (!text || chatSending) return;
-      chatInput.value = '';
-      sendChatMessage(text);
-    });
-    chatInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatForm.requestSubmit(); }
-    });
-  }
-
-  function toggleChat() { chatPanel && !chatPanel.hidden ? closeChat() : openChat(); }
-  function openChat() { ensureChatPanel(); if (!chatPanel) return; chatPanel.hidden = false; chatInput.focus(); }
-  function closeChat() { if (chatPanel) chatPanel.hidden = true; }
-
-  function addChatMsg(role, node) {
-    var wrap = document.createElement('div');
-    wrap.className = 'adm-chat__msg adm-chat__msg--' + role;
-    if (typeof node === 'string') wrap.textContent = node; else wrap.appendChild(node);
-    chatLog.appendChild(wrap);
-    chatLog.scrollTop = chatLog.scrollHeight;
-    return wrap;
-  }
-
-  function describeOp(op) {
-    if (op.op === 'setText') return op.key + ': "' + op.value.replace(/<[^>]+>/g, '') + '"';
-    if (op.op === 'listAdd') return '+ nytt element i «' + op.key + '»';
-    if (op.op === 'listUpdate') return '« ' + op.key + ' [' + op.index + ']» endres';
-    if (op.op === 'listRemove') return '– fjerner element ' + op.index + ' fra «' + op.key + '»';
-    return op.op + ' ' + op.key;
-  }
-
-  function renderProposal(data) {
-    var box = document.createElement('div');
-    var summary = document.createElement('div');
-    summary.className = 'adm-chat__summary';
-    summary.textContent = data.summary || 'Forslag til endringer:';
-    box.appendChild(summary);
-
-    if (data.edits && data.edits.length) {
-      var ul = document.createElement('ul');
-      ul.className = 'adm-chat__diff';
-      data.edits.forEach(function (op) {
-        var li = document.createElement('li');
-        li.textContent = describeOp(op);
-        ul.appendChild(li);
-      });
-      box.appendChild(ul);
-
-      var actions = document.createElement('div');
-      actions.className = 'adm-chat__actions';
-      var applyBtn = document.createElement('button');
-      applyBtn.type = 'button'; applyBtn.className = 'adm__btn adm__btn--primary';
-      applyBtn.textContent = '✓ Bruk endringene';
-      var rejectBtn = document.createElement('button');
-      rejectBtn.type = 'button'; rejectBtn.className = 'adm__btn adm__btn--ghost';
-      rejectBtn.textContent = '✕ Avvis';
-      actions.appendChild(applyBtn); actions.appendChild(rejectBtn);
-      box.appendChild(actions);
-
-      applyBtn.addEventListener('click', function () {
-        applyChatEdits(data.edits);
-        actions.innerHTML = '<span class="adm-chat__done">✓ Brukt. Husk å Publisere.</span>';
-      });
-      rejectBtn.addEventListener('click', function () {
-        actions.innerHTML = '<span class="adm-chat__done">Avvist</span>';
-      });
-    }
-    return box;
-  }
-
-  // Applies one proposal as a SINGLE undo step, using the same primitives as the
-  // manual editor (addListItem, collectList's field lookups) so behaviour matches
-  // a hand-made edit exactly.
-  function applyChatEdits(edits) {
-    pushUndo();
-    (edits || []).forEach(function (op) {
-      if (op.op === 'setText') {
-        var tf = textFields.filter(function (el) { return el.getAttribute('data-edit') === op.key; })[0];
-        if (tf) tf.innerHTML = sanitizeInline(op.value);
-        return;
-      }
-      var container = listContainers.filter(function (c) { return c.getAttribute('data-editable-list') === op.key; })[0];
-      if (!container) return;
-      if (op.op === 'listAdd') {
-        addListItem(container, op.item || {}, true);
-      } else if (op.op === 'listUpdate') {
-        var items = container.querySelectorAll('[data-list-item]');
-        var item = items[op.index];
-        if (!item) return;
-        Object.keys(op.item || {}).forEach(function (fk) {
-          var fEl = item.querySelector('[data-list-field="' + fk + '"]');
-          if (fEl) fEl.innerHTML = sanitizeInline(op.item[fk]);
-        });
-      } else if (op.op === 'listRemove') {
-        var list = container.querySelectorAll('[data-list-item]');
-        if (list.length > 1 && list[op.index]) list[op.index].remove();
-      }
-    });
-    status.textContent = '✓ AI-endringer brukt. Husk å Publisere.';
-  }
-
-  function sendChatMessage(text) {
-    addChatMsg('user', text);
-    chatHistory.push({ role: 'user', text: text });
-    var pending = addChatMsg('ai', 'Tenker …');
-    chatSending = true;
-    chatForm.querySelector('button[type="submit"]').disabled = true;
-
-    fetch('/api/chat', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ page: pageKey, pin: currentPin(), message: text, context: buildChatContext(), history: chatHistory.slice(-8) })
-    })
-      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
-      .then(function (res) {
-        pending.remove();
-        if (res.ok && res.j.ok) {
-          chatHistory.push({ role: 'assistant', text: res.j.summary || '' });
-          addChatMsg('ai', renderProposal(res.j));
-        } else {
-          addChatMsg('ai', '✗ ' + (res.j.error || 'Noe gikk galt'));
-          if (res.status === 401) offerPinRetry();
-        }
-      })
-      .catch(function (err) {
-        pending.remove();
-        addChatMsg('ai', '✗ ' + err);
-      })
-      .finally(function () {
-        chatSending = false;
-        chatForm.querySelector('button[type="submit"]').disabled = false;
-      });
-  }
-
-  // -------------------------------------------------------
   //  TOOLBAR EVENTS
   // -------------------------------------------------------
   bar.addEventListener('click', function (e) {
     var act = e.target.getAttribute('data-act');
     if (act === 'toggle')  setEditing(!editing);
     if (act === 'undo')    undo();
-    if (act === 'chat')    toggleChat();
     if (act === 'logout')  { sessionStorage.removeItem('admin_pin'); location.href = location.pathname; }
     if (act === 'publish') publish();
   });
@@ -1156,7 +1001,20 @@
         bilder: ventendeBilder
       })
     })
-      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
+      // Leser som tekst foerst, samme grep som verifyPin. Svarer Vercel med en
+      // HTML-side i stedet for JSON (en 504 paa en tung publisering er fullt
+      // mulig paa Hobby), ville r.json() kastet, og klienten hadde faatt
+      // "SyntaxError: Unexpected token <" i statuslinja.
+      .then(function (r) {
+        return r.text().then(function (t) {
+          var j = null;
+          try { j = JSON.parse(t); } catch (e) {}
+          if (!j || typeof j !== 'object') {
+            j = { error: 'Serveren svarte ' + r.status + ' uten et svar vi kan lese. Endringene dine står fortsatt på siden, prøv Publiser igjen om litt.' };
+          }
+          return { ok: r.ok, status: r.status, j: j };
+        });
+      })
       .then(function (res) {
         if (res.ok && res.j.ok) {
           ventendeBilder = [];
@@ -1165,6 +1023,14 @@
         }
         publishBtn.disabled = false;
         status.textContent = '✗ ' + (res.j.error || 'Feil');
+        // Serveren har avvist en bildepost. Den blir aldri godtatt senere heller,
+        // saa koeen maa toemmes: ellers sender hver ny Publiser den samme posten,
+        // og eneste vei ut er en omlasting som kaster alle tekstendringene.
+        if (res.status === 400) {
+          ventendeBilder = [];
+          status.textContent = '✗ ' + (res.j.error || 'Bildet ble avvist') + ' Bildet er fjernet fra køen, teksten din er beholdt.';
+          return;
+        }
         // For stor publisering: serveren sier hvor mye som er for mye, og en ny
         // PIN hjelper ikke. La feilteksten staa i stedet for aa spoerre om PIN.
         if (res.status === 413) {

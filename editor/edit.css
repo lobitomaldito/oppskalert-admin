@@ -26,7 +26,7 @@
   background: color-mix(in srgb, var(--adm-tekst) 14%, transparent); color: var(--adm-tekst); transition: all .2s;
 }
 .adm__btn:hover { background: color-mix(in srgb, var(--adm-tekst) 24%, transparent); }
-.adm__btn--primary { background: var(--adm-aksent); color: white; }
+.adm__btn--primary { background: var(--adm-aksent); color: var(--adm-flate); }
 .adm__btn--primary:hover { background: color-mix(in srgb, var(--adm-aksent) 85%, white); }
 .adm__btn--primary:disabled { opacity: 0.5; cursor: default; }
 .adm__btn--ghost { background: transparent; opacity: 0.7; font-weight: 500; }

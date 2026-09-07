@@ -8,9 +8,8 @@ test('ingen kall til det fjernede save-image-endepunktet', () => {
   assert.equal(js.includes('/api/save-image'), false);
 });
 
-test('chat-assistenten er av med mindre siden slaar den paa', () => {
-  assert.match(js, /CHAT_PAA\s*=\s*[^;]*data-admin-chat/);
-  assert.equal(/CHAT_PAA\s*=\s*true\s*;/.test(js), false);
+test('ingen chat-kode i pakken, siden endepunktet og stilarket ikke finnes', () => {
+  assert.equal(/CHAT_PAA|data-admin-chat|\/api\/chat/.test(js), false);
 });
 
 test('publisering sender bilder sammen med teksten', () => {
