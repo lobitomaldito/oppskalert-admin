@@ -524,44 +524,15 @@
     }
   }
 
-  // Strip everything except the small inline set the site's CSS actually styles
-  // (see gotcha #2 in the skill: <b>/<i> from execCommand are normalised on
-  // publish, but here we go straight to the semantic tags since this never
-  // passes through the format toolbar).
-  function sanitizeInline(html) {
-    var div = document.createElement('div');
-    div.innerHTML = String(html == null ? '' : html);
-    (function clean(node) {
-      [].slice.call(node.childNodes).forEach(function (n) {
-        if (n.nodeType === 8) { node.removeChild(n); return; } // comments
-        if (n.nodeType !== 1) return;
-        var tag = n.tagName.toLowerCase();
-        if (['strong', 'em', 'br'].indexOf(tag) === -1) {
-          while (n.firstChild) n.parentNode.insertBefore(n.firstChild, n);
-          n.parentNode.removeChild(n);
-          return;
-        }
-        [].slice.call(n.attributes).forEach(function (a) { n.removeAttribute(a.name); });
-        clean(n);
-      });
-    })(div);
-    return div.innerHTML;
-  }
-
-  // data: optional {field: html} to prefill the new item, in place of the empty
-  // fields a hand-added item starts with.
-  // skipSnapshot: for a caller that snapshots a whole batch of ops itself, where a
-  // per-item snapshot would make "Angre" revert only the last one.
-  function addListItem(container, data, skipSnapshot) {
+  function addListItem(container) {
     var existing = [].slice.call(container.querySelectorAll('[data-list-item]'));
     if (!existing.length) return;
-    if (!skipSnapshot) pushUndo();
+    pushUndo();
     // Clone structure from the last item and clear its content
     var clone = existing[existing.length - 1].cloneNode(true);
     clone.classList.remove('is-hidden-item');
     [].slice.call(clone.querySelectorAll('[data-list-field]')).forEach(function (el) {
-      var k = el.getAttribute('data-list-field');
-      el.innerHTML = (data && Object.prototype.hasOwnProperty.call(data, k)) ? sanitizeInline(data[k]) : '';
+      el.innerHTML = '';
     });
     [].slice.call(clone.querySelectorAll('[data-list-image-field]')).forEach(function (el) {
       if (el.tagName === 'IMG') el.setAttribute('src', '');
@@ -572,7 +543,6 @@
     container.appendChild(clone);
     activateItem(container, clone, true);
     clone.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    if (data) return; // prefilled item, don't steal focus into it
     var firstField = clone.querySelector('[data-list-field]');
     if (firstField) { skipFocusSnap = true; firstField.focus(); }
   }
@@ -642,10 +612,11 @@
   // aldri i repoet.
   var ventendeBilder = [];
 
-  // Serveren tar 3,5 MB per publisering. Base64 er 4 tegn per 3 byte.
-  // Klienten teller selv, saa den slipper aa oppdage taket foerst ved Publiser,
-  // der beskjeden ber om noe UI-et ikke kan gjore.
-  var MAKS_KOE = 3.5 * 1024 * 1024;
+  // Serveren tar 3,5 MB, men teller ogsaa med teksten paa siden. Klienten
+  // kjenner ikke tekststoerrelsen paa opplastingstidspunktet, saa den holder
+  // igjen 100 kB. Aa nekte et bilde litt for tidlig er riktig vei aa feile:
+  // alternativet er en 413 klienten ikke kan gjore noe med.
+  var MAKS_KOE = 3.5 * 1024 * 1024 - 100 * 1024;
   function koeStorrelse() {
     var sum = 0;
     for (var i = 0; i < ventendeBilder.length; i++) {
@@ -1028,6 +999,13 @@
         // og eneste vei ut er en omlasting som kaster alle tekstendringene.
         if (res.status === 400) {
           ventendeBilder = [];
+          // Attributtet peker paa en fil som aldri ble lastet opp. Blir det
+          // staaende, skriver neste Publiser en sti til ingenting, og bildet
+          // er stille oedelagt paa live i stedet for aa gi en feilmelding.
+          var forkastet = document.querySelectorAll('[data-img-url]');
+          for (var fi = 0; fi < forkastet.length; fi++) {
+            forkastet[fi].removeAttribute('data-img-url');
+          }
           status.textContent = '✗ ' + (res.j.error || 'Bildet ble avvist') + ' Bildet er fjernet fra køen, teksten din er beholdt.';
           return;
         }
