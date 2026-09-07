@@ -5,9 +5,13 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { lesProsjekt } from '../bin/_les-prosjekt.mjs';
 
-const CLI = new URL('../bin/oppskalert-admin.mjs', import.meta.url).pathname;
+// fileURLToPath og ikke .pathname: pathname er prosent-kodet, saa en mappe med
+// mellomrom i navnet blir til en sti som ikke finnes. Flere av kundesidene
+// ligger i slike mapper.
+const CLI = fileURLToPath(new URL('../bin/oppskalert-admin.mjs', import.meta.url));
 
 function prosjekt(htmlInnhold) {
   const rot = mkdtempSync(join(tmpdir(), 'oa-cli-'));
