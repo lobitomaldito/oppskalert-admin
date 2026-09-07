@@ -9,8 +9,14 @@ import byggetid from './regler/malt-byggetid.mjs';
 import strek from './regler/tankestrek.mjs';
 import ikkeXmenY from './regler/ikke-x-men-y.mjs';
 import sidenokkel from './regler/sidenokkel.mjs';
+import dekningTekst, { dekningListe } from './regler/dekning-tekst.mjs';
+import dekningBilde from './regler/dekning-bilde.mjs';
+import gjentattGruppe from './regler/gjentatt-gruppe.mjs';
 
-export const STANDARDREGLER = [margin, strongB, tokens, fonts, byggetid, strek, ikkeXmenY, sidenokkel];
+export const STANDARDREGLER = [
+  margin, strongB, tokens, fonts, byggetid, strek, ikkeXmenY, sidenokkel,
+  dekningTekst, dekningListe, dekningBilde, gjentattGruppe
+];
 
 export function kjor(prosjekt, regler = STANDARDREGLER) {
   const feil = [], varsler = [];
