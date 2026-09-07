@@ -49,6 +49,12 @@ test('detail-modal.js havner i dist/admin etter et bygg', () => {
   assert.ok(existsSync(join(rot, 'dist', 'admin', 'detail-modal.js')));
 });
 
+test('kollaps.js havner i dist/admin etter et bygg', () => {
+  const rot = lagProsjekt();
+  build({ rot });
+  assert.ok(existsSync(join(rot, 'dist', 'admin', 'kollaps.js')));
+});
+
 test('en side uten json bygges med malens standardtekst', () => {
   const rot = lagProsjekt();
   writeFileSync(join(rot, 'templates', 'om.html'), '<h1 data-edit="t">Om oss</h1>');
