@@ -1,7 +1,11 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-const HOPP_OVER = new Set(['node_modules', 'dist', '.git', '.vercel', '.output', '.nuxt']);
+// test hoppes over fordi doctor er ment for kundesider, som ikke har en
+// test-mappe. Skannet den testfiler, flagget reglene sine egne fixtures:
+// doctor.test.mjs inneholder bade en Google Fonts-lenke og en tankestrek,
+// begge med vilje, som testdata.
+const HOPP_OVER = new Set(['node_modules', 'dist', 'test', '.git', '.vercel', '.output', '.nuxt']);
 const LES = /\.(html|css|json|js|mjs|md)$/;
 
 export function lesProsjekt(rot) {

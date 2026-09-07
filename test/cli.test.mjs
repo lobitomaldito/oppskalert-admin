@@ -30,6 +30,13 @@ test('lesProsjekt hopper over node_modules', () => {
   assert.equal(lesProsjekt(rot).filer.some((f) => f.sti.includes('node_modules')), false);
 });
 
+test('lesProsjekt hopper over test-mappa, saa reglene ikke flagger sine egne fixtures', () => {
+  const rot = prosjekt('<h1>ok</h1>');
+  mkdirSync(join(rot, 'test'), { recursive: true });
+  writeFileSync(join(rot, 'test', 'x.test.mjs'), 'const s = "https://fonts.googleapis.com/css2";');
+  assert.equal(lesProsjekt(rot).filer.some((f) => f.sti.startsWith('test')), false);
+});
+
 test('doctor avslutter med 0 naar alt er rent', () => {
   const rot = prosjekt('<h1 data-edit="t">ok</h1>');
   const ut = execFileSync('node', [CLI, 'doctor', rot], { encoding: 'utf8' });
