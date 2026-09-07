@@ -173,13 +173,89 @@ oppskalert-admin tid [ms]        # måler og lagrer byggetiden
 oppskalert-admin dev [sti]       # lokal redigeringsløkke på http://localhost:8899
 ```
 
-`doctor` håndhever fire ting som feil: inline `margin` på et listeelement, CSS som
-styler `strong` uten å style `b`, manglende `--adm-*`-farger, og lenker til Google
-Fonts. Tre ting varsles: umålt byggetid, tankestrek, og mulige «ikke X, men
-Y»-setninger. Varsler er kandidater til gjennomlesing og stopper ingenting.
+`doctor` håndhever disse som feil: inline `margin` på et listeelement, CSS som
+styler `strong` uten å style `b`, manglende `--adm-*`-farger, lenker til Google
+Fonts, og manglende redigeringsmarkør på tekst og bilder (se Dekningskontrollen
+under). Disse varsles: umålt byggetid, tankestrek, mulige «ikke X, men
+Y»-setninger, manglende redigeringsmarkør i `li`, `h4` og topp-/bunntekst, og tre
+eller flere like søsken-elementer på rad. Varsler er kandidater til
+gjennomlesing og stopper ingenting.
 
 `dev` serverer `dist/`, tar imot publisering lokalt og bygger om med én gang. Det
 er samme løkke som i produksjon, uten ventetiden på Vercel.
+
+## Dekningskontrollen
+
+`doctor` sier hvilke felter i en mal som mangler redigeringsmarkør: `data-edit`,
+`data-edit-image`, `data-list-item` og de andre attributtene fra
+Instrumentering over. Skillet mellom feil og varsel er målt, ikke valgt.
+Tabellen under er kalibreringen, fra 22 maler på fire kundesider som er
+instrumentert for hånd.
+
+| Tagg | Historisk dekning | Gir |
+|---|---|---|
+| `h3` | 100 % | feil |
+| `blockquote` | 100 % | feil |
+| `p` | 84 % | feil |
+| `h2` | 81 % | feil |
+| `h1` | 56 % | feil |
+| `li` | 15 % | varsel |
+| `h4` | 13 % | varsel |
+
+`li` og `h4` er stort sett navigasjon og bunntekst, derfor varsel istedenfor
+feil.
+
+Fire avgrensninger, også målt:
+
+- Maler editoren aldri åpner (`404.html`, en mal med
+  `<meta http-equiv="refresh">`) hoppes over.
+- Ren `{{PLASSHOLDER}}`-tekst hoppes over.
+- Treff i `<header>`, `<footer>` og `<nav>` nedgraderes fra feil til varsel.
+- `gjentatt-gruppe` (under) leser aldri `<head>`.
+
+Effekt målt på de samme 22 malene: 75 feil ned til 39, falske positive fra
+49 % til 23 %, uten at et eneste ekte funn forsvant.
+
+`gjentatt-gruppe` varsler når tre eller flere søsken-elementer deler tagg og
+klasse uten å være en `data-editable-list`. To like elementer er ofte bare et
+layoutgrep (to kolonner), tre ligner en liste kunden selv burde få legge til og
+fjerne rader i.
+
+**`data-edit-ignore`** er avmeldingsmarkøren. Sett den på et element eller en
+forelder, og alle tre dekningsreglene tier om det. Bruk den på juridisk tekst,
+genererte datoer og annet som med rette skal stå fast.
+
+## detail-modal.js og kollaps.js
+
+To valgfrie filer i `editor/`, kopiert til `dist/admin/` av bygget som
+`edit.js`. Begge må lenkes i malen med sin egen `<script>`-tag.
+
+### Detaljvisning
+
+```html
+<script src="admin/detail-modal.js" defer></script>
+```
+
+Klikk på et `[data-list-item]` som inneholder `[data-list-detail]` åpner et
+fullskjerms overlegg. Kortet er en kort teaser, detaljblokken bærer den lange
+teksten (beskrivelse, kreditering, lenker). Tekst-URL-er til YouTube og Vimeo i
+detaljblokken blir innebygde spillere, både som ekte lenker og som ren tekst
+limt inn av klienten.
+
+`data-pos-modal` på bildet gir overlegget sitt eget utsnitt, uavhengig av
+utsnittet kortet bruker (`nokkel@pos`, se Instrumentering over). Uten den
+arver overlegget kortets utsnitt.
+
+### Kollaps
+
+```html
+<script src="admin/kollaps.js" defer></script>
+```
+
+`data-collapsible="N"` på en liste-beholder viser de første N
+`[data-list-item]` for besøkende, med en «Se X til»-knapp for resten.
+`data-collapsible-noun` styrer ordet i knappeteksten. Admin ser alltid alle
+elementene, uten kollaps.
 
 ## Kjente begrensninger
 
