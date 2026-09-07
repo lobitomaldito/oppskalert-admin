@@ -1426,6 +1426,11 @@ EOF
 
 ### Task 10: `editor/edit.js`, port og utsatt bildeopplasting
 
+> **Rettet under bygging:** chat-assistenten portes ikke i det hele tatt. Den
+> manglet både stilark og `/api/chat`-endepunkt. Steg 4 under er derfor erstattet
+> av «fjern hele chat-blokken», og testen som sjekket bryteren er byttet mot en
+> som sjekker at ingen chat-kode finnes i pakken.
+
 Den største enkeltjobben. Motoren portes fra Alphaneg (1195 linjer), som er den eneste kopien med serverside PIN-verifisering.
 
 **Files:**

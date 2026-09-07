@@ -52,7 +52,7 @@ bare forkes. De fem utslagene over er symptomer på den ene tingen.
   Konsekvens verdt å vite: Melanie Dahl og koflaath beholder PIN-hullet fra
   punkt 1.2 til de eventuelt løftes. Egen avgjørelse, egen spec.
 - Nuxt-formen (Birgitta v3 og v4) dekkes ikke. Egen runde.
-- Chat-assistenten portes, men står av som standard. Bestemt 2026-09-06.
+- Chat-assistenten portes ikke. Se avgjørelse 3 i seksjon 11.
 - Ingen felles dashbord på tvers av kunder. Panelet er per side, som i dag.
 
 ## 4. Arkitektur
@@ -289,7 +289,9 @@ Tatt 2026-09-06:
 1. **Konto:** `lobitomaldito`. Egen konto, samme eier som `mackeesy`.
 2. **Synlighet:** offentlig. Kreves for at Vercel skal installere uten en
    committet nøkkel. `--vendor` blir dermed fallback, ikke hovedvei.
-3. **Chat-assistenten** portes, men står av som standard.
+3. **Chat-assistenten portes ikke.** Besluttet under bygging: den manglet både
+   stilark og `/api/chat`-endepunkt, så bryteren kunne ikke virke. En bryter som
+   ikke kan virke er verre enn ingen bryter. Alphaneg beholder sin egen kopi.
 4. **Kun nye sider.** De 45 uten admin og de 4 med full stack står urørt.
 
 Gjenstår:
