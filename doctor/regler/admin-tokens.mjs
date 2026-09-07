@@ -5,6 +5,12 @@ export default {
   navn: 'admin-tokens',
   alvor: 'feil',
   sjekk: (p) => {
+    // Uten en eneste mal er prosjektet ingen nettside, og da har regelen
+    // ingenting aa uttale seg om. Pakkens eget repo er et slikt prosjekt:
+    // det er verktoyet, ikke en kundeside.
+    const htmlFiler = p.filer.filter((f) => f.sti.endsWith('.html'));
+    if (htmlFiler.length === 0) return [];
+
     // editor/edit.css definerer de fem variablene som fallback, saa en side som
     // glemmer aa sette dem faar en brukbar bar i stedet for en usynlig. Den er
     // motorens egen fil og aldri en sides token-fil, saa den skal ikke telle
@@ -24,7 +30,7 @@ export default {
     // Aa definere dem holder ikke. Er fila ikke lenket fra noen mal, laster
     // nettleseren den aldri, og admin-baren kjorer paa fallbackene i edit.css.
     // Regelen meldte OK paa noeyaktig det tilfellet den finnes for.
-    const html = p.filer.filter((f) => f.sti.endsWith('.html')).map((f) => f.tekst).join('\n');
+    const html = htmlFiler.map((f) => f.tekst).join('\n');
     const lenket = definerer.some((f) => {
       const navn = f.sti.split('/').pop();
       return html.includes(navn);

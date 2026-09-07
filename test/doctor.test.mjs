@@ -76,6 +76,10 @@ test('motorens egen fallback-css teller ikke som sidens token-fil', () => {
   assert.match(funn[0].melding, /mangler farger/);
 });
 
+test('et prosjekt uten maler er ingen nettside, og regelen sier ingenting', () => {
+  assert.deepEqual(tokens.sjekk(p([{ sti: 'build/index.mjs', tekst: 'export function build(){}' }])), []);
+});
+
 test('google fonts er en feil', () => {
   const funn = fonts.sjekk(p([{ sti: 'templates/a.html', tekst: '<link href="https://fonts.googleapis.com/css2?family=Inter">' }]));
   assert.equal(funn.length, 1);
