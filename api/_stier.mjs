@@ -21,3 +21,11 @@ export function trygStI(sti) {
 
   return sti;
 }
+
+// Delt av api/save.js og dev-serveren i CLI-en. Laa saniteringen bare i
+// save.js, kunne dev-serveren skrive "../../pwned" utenfor prosjektroten,
+// og det gjorde den.
+export function trygSidenavn(page) {
+  const rent = String(page == null ? '' : page).replace(/[^a-zA-Z0-9_-]/g, '');
+  return rent || null;
+}

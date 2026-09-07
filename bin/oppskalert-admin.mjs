@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { writeFileSync, readFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { join, extname, sep } from 'node:path';
 import { createServer } from 'node:http';
 import { build } from '../build/index.mjs';
-import { trygStI } from '../api/_stier.mjs';
+import { trygStI, trygSidenavn } from '../api/_stier.mjs';
 import { kjor } from '../doctor/index.mjs';
 import { lesProsjekt } from './_les-prosjekt.mjs';
 
@@ -90,8 +90,9 @@ function dev() {
       const biter = [];
       req.on('data', (c) => biter.push(c));
       req.on('end', () => {
-        let kropp = {};
-        try { kropp = JSON.parse(Buffer.concat(biter).toString()); } catch {}
+        let kropp;
+        try { kropp = JSON.parse(Buffer.concat(biter).toString()); }
+        catch (e) { return svar(400, { ok: false, error: 'Kroppen er ikke gyldig JSON.' }); }
         if (kropp.pin !== PIN) return svar(401, { ok: false, error: 'Feil PIN.' });
         if (req.url === '/api/verify-pin') return svar(200, { ok: true });
         if (!kropp.page || !kropp.edits) return svar(400, { ok: false, error: 'Mangler page eller edits' });
@@ -103,8 +104,10 @@ function dev() {
           writeFileSync(join(rot, trygg), Buffer.from(String(b.data).split(',').pop(), 'base64'));
         }
 
+        const sidenavn = trygSidenavn(kropp.page);
+        if (!sidenavn) return svar(400, { ok: false, error: 'Ugyldig sidenavn.' });
         mkdirSync(join(rot, 'content'), { recursive: true });
-        const f = join(rot, 'content', `${kropp.page}.json`);
+        const f = join(rot, 'content', `${sidenavn}.json`);
         const naa = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {};
         writeFileSync(f, JSON.stringify({ ...naa, ...kropp.edits }, null, 2));
         build({ rot });
@@ -113,11 +116,19 @@ function dev() {
       return;
     }
 
-    let rel = decodeURIComponent(req.url.split('?')[0]);
+    let rel;
+    try {
+      rel = decodeURIComponent(req.url.split('?')[0]);
+    } catch (e) {
+      res.writeHead(400); return res.end('Ugyldig adresse');
+    }
     if (rel.endsWith('/')) rel += 'index.html';
     if (!extname(rel)) rel += '.html';
     const fil = join(rot, 'dist', rel);
-    if (!fil.startsWith(join(rot, 'dist')) || !existsSync(fil)) {
+    // sep, ikke bare "dist": uten den matcher startsWith ogsaa dist-hemmelig
+    // og dist.bak, og de ligger utenfor det som skal serveres.
+    const distRot = join(rot, 'dist');
+    if ((fil !== distRot && !fil.startsWith(distRot + sep)) || !existsSync(fil)) {
       res.writeHead(404); return res.end('Ikke funnet');
     }
     res.writeHead(200, { 'Content-Type': MIME[extname(fil)] || 'application/octet-stream' });

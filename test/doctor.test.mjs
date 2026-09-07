@@ -33,6 +33,15 @@ test('strong og b sammen er greit', () => {
   assert.deepEqual(strongB.sjekk(p([{ sti: 'a.css', tekst: '.cv strong, .cv b { color:#fff }' }])), []);
 });
 
+test('et klassenavn som slutter paa -b teller ikke som b-elementet', () => {
+  const funn = strongB.sjekk(p([{ sti: 'a.css', tekst: '.cv strong, .cv .tab-b { color:#fff }' }]));
+  assert.equal(funn.length, 1);
+});
+
+test('strong b styrer b inne i strong, ikke fritt b, og skal ikke flagges', () => {
+  assert.deepEqual(strongB.sjekk(p([{ sti: 'a.css', tekst: 'strong b { color:#fff }' }])), []);
+});
+
 test('manglende admin-tokens er en feil', () => {
   const funn = tokens.sjekk(p([{ sti: 'static/css/tokens.css', tekst: ':root{--font-brod:x}' }]));
   assert.equal(funn.length, 1);

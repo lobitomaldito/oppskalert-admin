@@ -4,7 +4,7 @@ import { perLinje } from '../_hjelpere.mjs';
 export default {
   navn: 'tankestrek',
   alvor: 'varsel',
-  sjekk: (p) => perLinje(p, (s) => /\.(html|json|md)$/.test(s), (linje) =>
+  sjekk: (p) => perLinje(p, (s) => /\.(html|json|md|js|mjs)$/.test(s), (linje) =>
     linje.includes('—')
       ? 'Tankestrek funnet. Bruk komma, kolon eller punktum.'
       : null)

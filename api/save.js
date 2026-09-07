@@ -2,7 +2,7 @@
 // Vercel bygger, og besoekende faar ren statisk HTML.
 import { checkPin } from './_rateLimit.mjs';
 import { commitFiler, lesFil } from './_git.mjs';
-import { trygStI, MAKS_PAYLOAD } from './_stier.mjs';
+import { trygStI, trygSidenavn, MAKS_PAYLOAD } from './_stier.mjs';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Metoden er ikke tillatt' });
@@ -51,7 +51,9 @@ export default async function handler(req, res) {
     filer.push({ sti, innhold: String(b.data).split(',').pop(), base64: true });
   }
 
-  const innholdSti = `content/${String(page).replace(/[^a-zA-Z0-9_-]/g, '')}.json`;
+  const sidenavn = trygSidenavn(page);
+  if (!sidenavn) return res.status(400).json({ ok: false, error: 'Ugyldig sidenavn.' });
+  const innholdSti = `content/${sidenavn}.json`;
 
   try {
     // Lesingen ligger INNE i try. Kaster den (403, 500, oedelagt fil), skal
