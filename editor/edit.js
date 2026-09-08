@@ -1094,5 +1094,17 @@
       status.textContent = '✓ Publisert. Last inn siden manuelt for å se endringene.';
     });
   }
+
+  // -------------------------------------------------------
+  //  DELT MED DE VALGFRIE EDITOR-FILENE
+  // -------------------------------------------------------
+  // editor/skjema.js er en egen fil med sin egen IIFE, saa den naar ikke inn
+  // hit. Uten denne broen maatte den hatt sin egen kopi av prepImage, og to
+  // krympe-implementasjoner ville drevet fra hverandre. Bare hjelpere deles,
+  // ingen tilstand: PIN og sidenoekkel leser den selv fra DOM/sessionStorage.
+  // Objektet settes foerst her, etter at PIN-en er verifisert og baren staar,
+  // saa en besoekende uten admin ser ingenting av det.
+  window.oppskalertAdmin = { prepImage: prepImage, bar: bar, status: status };
+  document.dispatchEvent(new Event('adm:klar'));
   } // end initEditor
 })();
