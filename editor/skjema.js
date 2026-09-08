@@ -34,6 +34,10 @@
     '.adm-skjema__hjelp{margin-top:.3rem;font-size:12px;opacity:.6}' +
     '.adm-skjema__av{display:flex;align-items:center;gap:.5rem;font-size:14px}' +
     '.adm-skjema__bilde{display:block;max-width:100%;margin-top:.6rem;border-radius:10px}' +
+    // Maa staa etter regelen over: lik spesifisitet, saa den siste vinner.
+    // Uten denne slaar display:block nettleserens [hidden]{display:none}, og
+    // et avvist bilde blir staaende paa skjermen etter at koeen er toemt.
+    '.adm-skjema__bilde[hidden]{display:none}' +
     '.adm-skjema__knapper{display:flex;align-items:center;gap:10px;margin-top:1.4rem}' +
     '.adm-skjema__melding{margin-left:auto;font-size:13px;line-height:1.4;text-align:right;opacity:.85}' +
     '@media(max-width:600px){.adm-skjema__boks{padding:1.3rem 1.1rem}}';

@@ -844,7 +844,12 @@
   document.addEventListener('keydown', function (e) {
     if (!editing) return;
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
-      if (e.target && e.target.isContentEditable) return;
+      var t = e.target;
+      // Samme unntak som aktiveringssekvensen over: et ekte <input> eller
+      // <textarea> (skjema.js sitt Nytt innlegg-overlegg) skal beholde
+      // nettleserens egen tekst-angre. Uten dette river Angre bort
+      // redigeringsomraadet mens klienten skriver.
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       e.preventDefault();
       undo();
     }

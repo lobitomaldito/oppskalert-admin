@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { build } from '../build/index.mjs';
+import { lagSlug } from '../build/samling.mjs';
 
 const js = readFileSync(new URL('../editor/skjema.js', import.meta.url), 'utf8');
 const editJs = readFileSync(new URL('../editor/edit.js', import.meta.url), 'utf8');
@@ -79,12 +80,55 @@ test('innlegget baerer feltene serveren og bygget venter seg', () => {
   });
 });
 
-test('slug lages fra tittelen med norsk translitterasjon', () => {
-  assert.match(js, /function lagSlug/);
-  assert.match(js, /replace\(\/æ\/g, 'ae'\)/);
-  assert.match(js, /replace\(\/ø\/g, 'oe'\)/);
-  assert.match(js, /replace\(\/å\/g, 'aa'\)/);
-  assert.match(js, /replace\(\/\^-\+\|-\+\$\/g, ''\)/);
+// skjema.js sin lagSlug er en ES5-tvilling av lagSlug i build/samling.mjs.
+// To implementasjoner av samme regel driver fra hverandre om ingen sammenligner
+// dem. Her hentes selve funksjonskroppen ut av kildeteksten og kjoeres, saa en
+// retting i den ene uten den andre gir en roed test i stedet for to slugger som
+// stille peker paa hver sin fil.
+function hentLagSlug(kilde) {
+  const treff = kilde.match(/\n {2}function lagSlug\(tittel\) \{\n([\s\S]*?)\n {2}\}\n/);
+  assert.ok(treff, 'fant ikke lagSlug i editor/skjema.js');
+  return new Function('tittel', treff[1]);
+}
+
+test('lagSlug i skjema.js gir samme slug som lagSlug i build/samling.mjs', () => {
+  const klient = hentLagSlug(js);
+  const titler = [
+    'Ærlig øl på Åsen!',
+    '  --Hei--  ',
+    '',
+    'Blåbær & fløte, 2026',
+    'Nytt   innlegg   om   ØL',
+    '???',
+    'Vår 2026: Åpent hus på Grünerløkka'
+  ];
+  titler.forEach((tittel) => {
+    assert.equal(klient(tittel), lagSlug(tittel), 'ulik slug for tittelen ' + JSON.stringify(tittel));
+  });
+});
+
+test('lagSlug i skjema.js gir de forventede sluggene', () => {
+  const klient = hentLagSlug(js);
+  assert.equal(klient('Ærlig øl på Åsen!'), 'aerlig-oel-paa-aasen');
+  assert.equal(klient('  --Hei--  '), 'hei');
+  assert.equal(klient(''), 'innlegg');
+  assert.equal(klient('???'), 'innlegg');
+});
+
+test('Cmd/Ctrl+Z i edit.js lar INPUT og TEXTAREA beholde nettleserens tekst-angre', () => {
+  const gren = editJs.slice(editJs.indexOf("e.key === 'z'"));
+  const unntak = gren.slice(0, gren.indexOf('e.preventDefault()'));
+  assert.match(unntak, /tagName === 'INPUT'/, 'INPUT er ikke unntatt foer preventDefault');
+  assert.match(unntak, /tagName === 'TEXTAREA'/, 'TEXTAREA er ikke unntatt foer preventDefault');
+  assert.match(unntak, /isContentEditable/, 'contenteditable er ikke lenger unntatt');
+});
+
+test('forhaandsvisningen kan faktisk skjules: [hidden] staar etter display:block', () => {
+  const blokk = js.indexOf('.adm-skjema__bilde{display:block');
+  const skjult = js.indexOf('.adm-skjema__bilde[hidden]{display:none}');
+  assert.ok(blokk >= 0, 'fant ikke regelen for forhaandsvisningen');
+  assert.ok(skjult >= 0, 'display:block slaar [hidden] uten en egen regel');
+  assert.ok(blokk < skjult, '[hidden]-regelen maa staa sist for aa vinne ved lik spesifisitet');
 });
 
 test('skjema.js havner i dist/admin etter et bygg', () => {
