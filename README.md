@@ -349,11 +349,24 @@ Listeseksjonen på foreldresiden (typisk forsiden):
 | Attributt | Virkning |
 |---|---|
 | `data-samling="navn"` | Beholder for lista. `navn` matcher `.json`-filens navn uten endelse. |
-| `data-list-item` | Ett kort per innlegg, samme mal-per-indeks-prinsipp som `data-editable-list`. |
+| `data-list-item` | Ett kort per innlegg. Første kort brukes som mal for alle, siden antall innlegg er ukjent. |
 | `data-list-field="felt"` | Redigerbar tekst inne i kortet. |
 | `data-list-image-field="felt"` | Bilde inne i kortet. |
 | `data-samling-lenke` | Lenken til innleggets egen side. `href` settes automatisk. |
-| `data-samling-antall="N"` | Begrenser lista til de N nyeste. Utelates attributtet, vises hele samlingen. |
+| `data-samling-antall="N"` | Begrenser lista til de N nyeste. Utelates attributtet, vises hele samlingen. Er verdien ikke et positivt tall, vises hele samlingen og bygget skriver et varsel. |
+
+Hele `[data-samling]`-elementet låses som skrivebeskyttet i editoren (motoren
+setter `data-content-src` på beholderen, og `edit.js` sjekker den med
+`closest()`). Legg derfor aldri egne `data-edit`- eller
+`data-edit-image`-elementer inne i beholderen utenom listemalen: de blir
+uredigerbare. Trenger seksjonen en redigerbar overskrift eller ingress, sett
+den utenfor `[data-samling]`.
+
+Sitemap: har prosjektet en `static/sitemap.xml` med minst én absolutt `<loc>`
+(`https://kundedomene.no/…`), legger bygget innleggssidene inn i den med samme
+skjema og host. Finnes ingen slik fil, skrives ingen `dist/sitemap.xml`, og
+bygget sier fra i stedet. Sitemap-protokollen krever fullt kvalifiserte URL-er,
+og motoren kjenner ikke kundens domene fra noe annet sted.
 
 `editor/skjema.js` gir klienten «Nytt innlegg»-knappen og skjemaet den åpner.
 Filen kopieres til `dist/admin/` av bygget, men må lenkes i malen manuelt,

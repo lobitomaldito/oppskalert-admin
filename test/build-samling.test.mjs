@@ -35,6 +35,16 @@ function malMedSamling(indre, attributter = '') {
   return `<html><body><div data-samling="aktuelt"${attributter}>${indre}</div></body></html>`;
 }
 
+// Fanger console.warn under et bygg. Bygget varsler i stedet for aa kaste, saa
+// varselet er den eneste maaten en test kan se at motoren sa fra.
+function medVarsler(fn) {
+  const linjer = [];
+  const orig = console.warn;
+  console.warn = (...a) => linjer.push(a.join(' '));
+  try { fn(); } finally { console.warn = orig; }
+  return linjer;
+}
+
 // --- Task 2: en side per innlegg ---
 
 test('to innlegg gir to sider paa riktig sti', () => {
@@ -193,6 +203,72 @@ test('data-samling-antall begrenser til de nyeste', () => {
   build({ rot });
   const dom = parse(readFileSync(join(rot, 'dist', 'index.html'), 'utf8'));
   assert.equal(dom.querySelectorAll('[data-list-item]').length, 2);
+});
+
+// Number('tre') er NaN, og slice(0, NaN) toemte foer hele seksjonen. En
+// skrivefeil i ett attributt skal ikke slette nyhetsfeltet fra den ferdige
+// siden, og aller minst uten et ord om det.
+test('en ugyldig data-samling-antall viser alle innlegg og varsler', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', 'index.html'), malMedSamling(
+    '<article data-list-item><h3 data-list-field="tittel">X</h3></article>', ' data-samling-antall="tre"'));
+  lagSamling(rot, 'aktuelt', [
+    { slug: 'a', tittel: 'A', dato: '2026-01-01' },
+    { slug: 'b', tittel: 'B', dato: '2026-02-01' },
+    { slug: 'c', tittel: 'C', dato: '2026-03-01' },
+  ]);
+  const varsler = medVarsler(() => build({ rot }));
+  const dom = parse(readFileSync(join(rot, 'dist', 'index.html'), 'utf8'));
+  assert.equal(dom.querySelectorAll('[data-list-item]').length, 3, 'seksjonen ble tommet eller kuttet');
+  assert.ok(varsler.some((l) => /data-samling-antall="tre"/.test(l)), `manglet varsel, fikk: ${varsler.join(' | ')}`);
+});
+
+test('data-samling-antall="0" viser alle innlegg og varsler', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', 'index.html'), malMedSamling(
+    '<article data-list-item><h3 data-list-field="tittel">X</h3></article>', ' data-samling-antall="0"'));
+  lagSamling(rot, 'aktuelt', [
+    { slug: 'a', tittel: 'A', dato: '2026-01-01' },
+    { slug: 'b', tittel: 'B', dato: '2026-02-01' },
+  ]);
+  const varsler = medVarsler(() => build({ rot }));
+  const dom = parse(readFileSync(join(rot, 'dist', 'index.html'), 'utf8'));
+  assert.equal(dom.querySelectorAll('[data-list-item]').length, 2);
+  assert.ok(varsler.some((l) => /data-samling-antall="0"/.test(l)));
+});
+
+test('et gyldig data-samling-antall varsler ikke', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', 'index.html'), malMedSamling(
+    '<article data-list-item><h3 data-list-field="tittel">X</h3></article>', ' data-samling-antall="1"'));
+  lagSamling(rot, 'aktuelt', [
+    { slug: 'a', tittel: 'A', dato: '2026-01-01' },
+    { slug: 'b', tittel: 'B', dato: '2026-02-01' },
+  ]);
+  const varsler = medVarsler(() => build({ rot }));
+  assert.ok(!varsler.some((l) => /data-samling-antall/.test(l)), `varslet paa en gyldig verdi: ${varsler.join(' | ')}`);
+});
+
+// --- Understrek-maler ---
+
+// Regelen "maler som starter med _ bygges ikke som egen side" er ubetinget og
+// skal staa. Et gammelt prosjekt kan ha en understrek-mal av en annen grunn,
+// og skal faa vite at siden forsvant.
+test('en annen understrek-mal enn _innlegg.html hoppes over MED et varsel', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', '_annenting.html'), '<html><body><h1>Annet</h1></body></html>');
+  const varsler = medVarsler(() => build({ rot }));
+  assert.ok(!existsSync(join(rot, 'dist', '_annenting.html')), 'understrek-malen ble bygd som egen side');
+  assert.ok(varsler.some((l) => /_annenting\.html hoppes over/.test(l)), `manglet varsel, fikk: ${varsler.join(' | ')}`);
+});
+
+test('_innlegg.html hoppes over stille, det er dens tiltenkte rolle', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', '_innlegg.html'), '<html><body><h1 data-innlegg="tittel">X</h1></body></html>');
+  lagSamling(rot, 'aktuelt', [{ slug: 'a', tittel: 'A', dato: '2026-01-01' }]);
+  const varsler = medVarsler(() => build({ rot }));
+  assert.ok(!existsSync(join(rot, 'dist', '_innlegg.html')));
+  assert.ok(!varsler.some((l) => /_innlegg\.html/.test(l)), `varslet paa _innlegg.html: ${varsler.join(' | ')}`);
 });
 
 test('utkast er ikke med i samlingslista', () => {

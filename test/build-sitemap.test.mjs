@@ -22,21 +22,60 @@ function lagSamling(rot, navn, innlegg) {
   writeFileSync(join(rot, 'content', 'samlinger', `${navn}.json`), JSON.stringify(innlegg));
 }
 
-test('to synlige innlegg og ingen static/sitemap.xml gir en ny sitemap med rot-relative loc', () => {
+// Fanger console.warn under et bygg. Bygget varsler i stedet for aa kaste, saa
+// varselet er den eneste maaten en test kan se at motoren sa fra.
+function medVarsler(fn) {
+  const linjer = [];
+  const orig = console.warn;
+  console.warn = (...a) => linjer.push(a.join(' '));
+  try { fn(); } finally { console.warn = orig; }
+  return linjer;
+}
+
+// Sitemaps.org krever en fullt kvalifisert URL i <loc>. Uten en sitemap fra
+// foer kjenner motoren ikke kundens domene, og en fil med rot-relative <loc>
+// forkastes i sin helhet av Google Search Console. Da er ingen fil det riktige.
+test('to synlige innlegg og ingen static/sitemap.xml gir INGEN sitemap, bare et varsel', () => {
   const rot = lagProsjekt();
   writeFileSync(join(rot, 'templates', '_innlegg.html'), '<html><body><h1 data-innlegg="tittel">X</h1></body></html>');
   lagSamling(rot, 'aktuelt', [
     { slug: 'forste-sak', tittel: 'Foerste sak', dato: '2026-01-01' },
     { slug: 'andre-sak', tittel: 'Andre sak', dato: '2026-02-01' },
   ]);
+  const varsler = medVarsler(() => build({ rot }));
+  assert.ok(!existsSync(join(rot, 'dist', 'sitemap.xml')), 'skrev en sitemap uten domene');
+  assert.ok(varsler.some((l) => /ingen sitemap med domene/.test(l)), `manglet varsel, fikk: ${varsler.join(' | ')}`);
+});
+
+// En sitemap uten en eneste absolutt <loc> gir ingen base aa bygge paa. Fila
+// staar da uroert, og bygget sier fra, i stedet for aa blande inn oppfoeringer
+// som Search Console avviser.
+test('en sitemap fra foer uten absolutt loc staar uroert, og bygget varsler', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', '_innlegg.html'), '<html><body><h1 data-innlegg="tittel">X</h1></body></html>');
+  mkdirSync(join(rot, 'static'), { recursive: true });
+  const original = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
+    '<url><loc>/</loc></url></urlset>';
+  writeFileSync(join(rot, 'static', 'sitemap.xml'), original);
+  lagSamling(rot, 'aktuelt', [{ slug: 'en-sak', tittel: 'En sak', dato: '2026-01-01' }]);
+  const varsler = medVarsler(() => build({ rot }));
+  assert.equal(readFileSync(join(rot, 'dist', 'sitemap.xml'), 'utf8'), original);
+  assert.ok(varsler.some((l) => /ingen sitemap med domene/.test(l)), `manglet varsel, fikk: ${varsler.join(' | ')}`);
+});
+
+// Samlingsnavnet kommer fra et filnavn og gaar ikke gjennom slugErGyldig.
+test('et samlingsnavn med & escapes i <loc>', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', '_innlegg.html'), '<html><body><h1 data-innlegg="tittel">X</h1></body></html>');
+  mkdirSync(join(rot, 'static'), { recursive: true });
+  writeFileSync(join(rot, 'static', 'sitemap.xml'),
+    '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
+    '<url><loc>https://kunde.no/</loc></url></urlset>');
+  lagSamling(rot, 'bygg&anlegg', [{ slug: 'en-sak', tittel: 'En sak', dato: '2026-01-01' }]);
   build({ rot });
-  const sitemapSti = join(rot, 'dist', 'sitemap.xml');
-  assert.ok(existsSync(sitemapSti));
-  const xml = readFileSync(sitemapSti, 'utf8');
-  assert.match(xml, /^<\?xml version="1\.0" encoding="UTF-8"\?><urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
-  assert.match(xml, /<url><loc>\/aktuelt\/forste-sak\/<\/loc><\/url>/);
-  assert.match(xml, /<url><loc>\/aktuelt\/andre-sak\/<\/loc><\/url>/);
-  assert.match(xml, /<\/urlset>$/);
+  const xml = readFileSync(join(rot, 'dist', 'sitemap.xml'), 'utf8');
+  assert.match(xml, /<loc>https:\/\/kunde\.no\/bygg&amp;anlegg\/en-sak\/<\/loc>/);
+  assert.doesNotMatch(xml, /<loc>[^<]*bygg&anlegg/, 'raa & i <loc> gir ugyldig XML');
 });
 
 test('en eksisterende static/sitemap.xml med absolutte URL-er utvides med samme domene', () => {
@@ -72,6 +111,10 @@ test('uten samling men med en static/sitemap.xml fra foer staar den kopierte fil
 test('et utkast havner ikke i sitemap.xml', () => {
   const rot = lagProsjekt();
   writeFileSync(join(rot, 'templates', '_innlegg.html'), '<html><body><h1 data-innlegg="tittel">X</h1></body></html>');
+  mkdirSync(join(rot, 'static'), { recursive: true });
+  writeFileSync(join(rot, 'static', 'sitemap.xml'),
+    '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
+    '<url><loc>https://kunde.no/</loc></url></urlset>');
   lagSamling(rot, 'aktuelt', [
     { slug: 'synlig-sak', tittel: 'Synlig', dato: '2026-01-01' },
     { slug: 'hemmelig-sak', tittel: 'Kladd', dato: '2026-02-01', _kladd: '1' },

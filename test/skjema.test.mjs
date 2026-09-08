@@ -115,6 +115,67 @@ test('lagSlug i skjema.js gir de forventede sluggene', () => {
   assert.equal(klient('???'), 'innlegg');
 });
 
+// Innleggsfeltene er HTML: build/index.mjs setter dem inn med set_content(),
+// som er raa innsetting. Skjemaet leser ren tekst ut av <input>/<textarea>, og
+// maa derfor selv lage gyldig, escaped HTML. Samme uttrekksgrep som for
+// lagSlug: funksjonskroppen hentes ut av kildeteksten og kjoeres.
+function hentKropp(kilde, navn) {
+  const re = new RegExp('\\n {2}function ' + navn + '\\(tekst\\) \\{\\n([\\s\\S]*?)\\n {2}\\}\\n');
+  const treff = kilde.match(re);
+  assert.ok(treff, 'fant ikke ' + navn + ' i editor/skjema.js');
+  return treff[1];
+}
+
+function hentTekstTilHtml(kilde) {
+  return new Function('tekst',
+    'function escapeHtml(tekst) {' + hentKropp(kilde, 'escapeHtml') + '}\n' + hentKropp(kilde, 'tekstTilHtml'));
+}
+
+test('brodteksten deles i avsnitt: to avsnitt gir to <p>', () => {
+  const tilHtml = hentTekstTilHtml(js);
+  assert.equal(tilHtml('Foerste avsnitt.\n\nAndre avsnitt.'),
+    '<p>Foerste avsnitt.</p><p>Andre avsnitt.</p>');
+  // Flere tomme linjer paa rad er fortsatt ett skille, ikke tomme avsnitt.
+  assert.equal(tilHtml('A\n\n\n\nB'), '<p>A</p><p>B</p>');
+  // Enkelt linjeskift inne i et avsnitt overlever som <br>.
+  assert.equal(tilHtml('Linje en\nLinje to'), '<p>Linje en<br>Linje to</p>');
+  assert.equal(tilHtml('   '), '');
+  assert.equal(tilHtml(''), '');
+});
+
+test('brodteksten escapes: <, & og > kommer ut som synlig tekst', () => {
+  const tilHtml = hentTekstTilHtml(js);
+  assert.equal(tilHtml('A & <b>test</b>'), '<p>A &amp; &lt;b&gt;test&lt;/b&gt;</p>');
+  // & FOERST, ellers escaper vi vaar egen escaping: &lt; skal ikke bli &amp;lt;
+  assert.equal(tilHtml('<script>alert(1)</script>'),
+    '<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>');
+  assert.doesNotMatch(tilHtml('<script>x</script>'), /<script/);
+  // Skrev klienten selv "&lt;", er det fire tegn hun vil se paa siden, og de
+  // maa escapes en gang til for aa overleve som tekst.
+  assert.equal(tilHtml('a &lt; b'), '<p>a &amp;lt; b</p>');
+  // & foerst: escapes < foer &, kommer et enkelt < ut som &amp;lt; og vises
+  // som teksten "&lt;" i stedet for som "<".
+  assert.equal(tilHtml('a < b'), '<p>a &lt; b</p>');
+});
+
+test('tittel og ingress escapes ogsaa, de settes inn med samme raa set_content', () => {
+  const escape = new Function('tekst', hentKropp(js, 'escapeHtml'));
+  assert.equal(escape('<script>alert(1)</script>'), '&lt;script&gt;alert(1)&lt;/script&gt;');
+  assert.equal(escape('Bygg & anlegg'), 'Bygg &amp; anlegg');
+  assert.equal(escape(''), '');
+  // Feltene i innlegget skal gaa gjennom en av de to funksjonene, aldri raatt.
+  assert.match(js, /tittel: escapeHtml\(/);
+  assert.match(js, /ingress: escapeHtml\(/);
+  assert.match(js, /brodtekst: tekstTilHtml\(/);
+});
+
+test('escape-lytteren fjernes igjen naar overlegget lukkes', () => {
+  assert.match(js, /document\.addEventListener\('keydown', paaEscape\)/);
+  const lukk = js.slice(js.indexOf('function lukk()'), js.indexOf('function apne('));
+  assert.match(lukk, /document\.removeEventListener\('keydown', paaEscape\)/,
+    'lukk() lar lytteren staa igjen, en per aapning');
+});
+
 test('Cmd/Ctrl+Z i edit.js lar INPUT og TEXTAREA beholde nettleserens tekst-angre', () => {
   const gren = editJs.slice(editJs.indexOf("e.key === 'z'"));
   const unntak = gren.slice(0, gren.indexOf('e.preventDefault()'));

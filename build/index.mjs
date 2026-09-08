@@ -49,6 +49,20 @@ function bakInnlegg(dom, post) {
 // attributt som resten av motoren bruker for skrivebeskyttede speil
 // (data-content-src, sjekket av editor/edit.js sin inMirror()): kilden er
 // samlingen, og et innlegg redigeres der, ikke i lista paa foreldresiden.
+// Laasen dekker HELE beholderen, saa et [data-samling]-element skal ikke
+// inneholde egne data-edit/data-edit-image utenom listemalen (se README).
+//
+// BEVISSTE FORSKJELLER fra bakeLister() i build/bake.mjs. Endres bakeLister,
+// er dette de tre stedene som IKKE foelger med av seg selv:
+//   1. Mal-valg: bakeLister rendrer post i fra malStrenger[i], saa et
+//      framhevet kort 2 beholder formen sin. bakSamlinger bruker alltid den
+//      foerste malen, fordi antall innlegg i en samling er ukjent og vokser.
+//   2. Fokuspunkt: bakeLister leser felt@pos og felt@pos-modal og kaller
+//      settFokuspunkt. Samlinger har ingen utsnitts-UI enda, saa ingen slike
+//      verdier finnes aa lese.
+//   3. _skjult: bakeLister legger paa .is-hidden-item. Samlinger skjuler med
+//      _kladd i stedet, og et utkast bygges aldri (se synlige() i
+//      build/samling.mjs). De to er ulike mekanismer med vilje.
 function bakSamlinger(dom, samlinger) {
   let treff = 0;
 
@@ -72,8 +86,15 @@ function bakSamlinger(dom, samlinger) {
       return da > db ? -1 : 1;
     });
 
+    // Number('tre') er NaN, og slice(0, NaN) gir en tom liste: en skrivefeil i
+    // ett attributt slettet foer hele seksjonen fra den ferdige siden, stille.
+    // Et ugyldig tall skal heller vise alt og si fra.
     const antall = beholder.getAttribute('data-samling-antall');
-    if (antall) poster = poster.slice(0, Number(antall));
+    if (antall != null) {
+      const n = Number(antall);
+      if (Number.isFinite(n) && n > 0) poster = poster.slice(0, n);
+      else console.warn(`  ! data-samling-antall="${antall}" er ikke et gyldig tall, viser alle innlegg`);
+    }
 
     poster.forEach((post) => {
       const rotNode = parse(malStreng);
@@ -108,35 +129,49 @@ function bakSamlinger(dom, samlinger) {
   return treff;
 }
 
-// Skriver eller utvider dist/sitemap.xml med innleggssidenes stier. Kalles
-// aldri naar stier er tom, saa et prosjekt uten samling verken lager en ny
-// fil eller rorer en static/sitemap.xml som allerede ble kopiert som den er
-// (se cpSync(STATISK, DIST, ...) over).
+// Samlingsnavnet kommer fra et JSON-filnavn og gaar ikke gjennom slugErGyldig,
+// saa en samling som heter noe med & gir ugyldig XML uten dette steget.
+function xmlTrygg(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Utvider dist/sitemap.xml med innleggssidenes stier. Kalles aldri naar stier
+// er tom, saa et prosjekt uten samling rorer aldri en static/sitemap.xml som
+// allerede ble kopiert som den er (se cpSync(STATISK, DIST, ...) over).
 //
 // Motoren har ingen domene-konfigurasjon noe sted (bevisst, se de relative
-// stiene ellers i denne fila). Finnes det en sitemap fra foer med absolutte
-// <loc>-URL-er, gjenbrukes noeyaktig samme skjema+host, lest ut av den
-// forste <loc>-verdien. Finnes ingen sitemap fra foer, skrives rot-relative
-// <loc>-verdier, samme konvensjon som data-samling-lenke sine href-er.
+// stiene ellers i denne fila). Domenet leses derfor ut av den foerste
+// <loc>-verdien i en sitemap prosjektet allerede har, og de nye oppfoeringene
+// gjenbruker noeyaktig samme skjema+host.
+//
+// Finnes ingen slik base, skrives INGEN fil. Sitemaps.org-protokollen krever
+// at <loc> er en fullt kvalifisert URL med protokoll, og Google Search Console
+// forkaster hele fila naar en oppfoering er rot-relativ. En ufullstendig
+// sitemap som dessuten bare ville listet innleggene, og verken forsiden eller
+// de andre bygde sidene, er verre enn ingen sitemap.
 function oppdaterSitemap(DIST, stier) {
   if (stier.length === 0) return;
 
   const sitemapSti = join(DIST, 'sitemap.xml');
-  if (existsSync(sitemapSti)) {
-    let xml = readFileSync(sitemapSti, 'utf8');
-    const forsteLoc = xml.match(/<loc>([^<]+)<\/loc>/);
-    const domene = forsteLoc ? (forsteLoc[1].match(/^https?:\/\/[^/]+/) || [''])[0] : '';
-    const nyeUrler = stier.map((s) => `<url><loc>${domene}${s}</loc></url>`).join('');
-    // Ingen </urlset>-tag betyr en oedelagt fil fra foer: xml staar da uroert,
-    // ingenting skrives, samme "krasj aldri paa daarlig innhold"-prinsipp som
-    // resten av bygget.
-    if (xml.includes('</urlset>')) xml = xml.replace('</urlset>', `${nyeUrler}</urlset>`);
-    writeFileSync(sitemapSti, xml);
-  } else {
-    const urler = stier.map((s) => `<url><loc>${s}</loc></url>`).join('');
-    writeFileSync(sitemapSti,
-      `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urler}</urlset>`);
-  }
+  const varsle = () => console.warn(
+    '  ! prosjektet har innlegg, men ingen sitemap med domene aa bygge videre paa. ' +
+    'Legg en static/sitemap.xml med minst en absolutt URL i seg ' +
+    '(f.eks. <url><loc>https://kundedomene.no/</loc></url>) om du vil ha innleggene i sitemapen.');
+
+  if (!existsSync(sitemapSti)) { varsle(); return; }
+
+  let xml = readFileSync(sitemapSti, 'utf8');
+  const forsteLoc = xml.match(/<loc>([^<]+)<\/loc>/);
+  const domene = forsteLoc ? (forsteLoc[1].match(/^https?:\/\/[^/]+/) || [''])[0] : '';
+  if (!domene) { varsle(); return; }
+
+  const nyeUrler = stier.map((s) => `<url><loc>${domene}${xmlTrygg(s)}</loc></url>`).join('');
+  // Ingen </urlset>-tag betyr en oedelagt fil fra foer: xml staar da uroert,
+  // ingenting skrives, samme "krasj aldri paa daarlig innhold"-prinsipp som
+  // resten av bygget.
+  if (!xml.includes('</urlset>')) return;
+  xml = xml.replace('</urlset>', `${nyeUrler}</urlset>`);
+  writeFileSync(sitemapSti, xml);
 }
 
 export function build(config = {}) {
@@ -198,7 +233,15 @@ export function build(config = {}) {
     if (!fil.endsWith('.html')) continue;
     // Maler som starter med _ hoerer til en samling (f.eks. _innlegg.html) og
     // bygges aldri som en egen side. Se lenger ned for hvordan de faktisk brukes.
-    if (fil.startsWith('_')) continue;
+    // Regelen er ubetinget, og gjelder ogsaa prosjekter uten samlinger. Et
+    // eksisterende prosjekt kan ha en understrek-mal av en helt annen grunn og
+    // miste siden sin stille, saa alt annet enn _innlegg.html sier fra.
+    if (fil.startsWith('_')) {
+      if (fil !== '_innlegg.html') {
+        console.warn(`  ! ${fil} hoppes over (starter med _, bygges ikke som egen side). Var dette meningen?`);
+      }
+      continue;
+    }
     const side = fil.replace(/\.html$/, '');
     const dom = parse(readFileSync(join(TPL, fil), 'utf8'), { comment: true });
     const slaOpp = lagOppslag(lastInnhold(side), lastInnhold);

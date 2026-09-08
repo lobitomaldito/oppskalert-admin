@@ -71,6 +71,34 @@
   }
   function slugErGyldig(slug) { return /^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug); }
 
+  // Feltene i et innlegg er HTML, ikke ren tekst: bakInnlegg() og bakSamlinger()
+  // i build/index.mjs setter dem inn med set_content(), som er raa innsetting,
+  // og planens eget eksempel har "<p>Full tekst.</p>" i brodtekst. Skjemaet her
+  // leser derimot ren tekst ut av et <input>/<textarea>. Uten et steg imellom
+  // ble et & eller et < klienten skrev til levende markup paa den ferdige siden.
+  //
+  // & maa escapes FOERST. Snus rekkefoelgen, escaper vi vaar egen escaping og
+  // et < kommer ut som &amp;lt;.
+  function escapeHtml(tekst) {
+    return String(tekst == null ? '' : tekst)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // Brodteksten i tillegg: HTML kollapser whitespace, saa tomme linjer i
+  // <textarea> blir borte og hele innlegget havner i en eneste tekstblokk.
+  // Tom linje skiller avsnitt, enkelt linjeskift inne i et avsnitt blir <br>.
+  function tekstTilHtml(tekst) {
+    var s = escapeHtml(tekst).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    var deler = s.split(/\n[ \t]*\n+/);
+    var ut = [];
+    for (var i = 0; i < deler.length; i++) {
+      var avsnitt = deler[i].trim();
+      if (!avsnitt) continue;
+      ut.push('<p>' + avsnitt.replace(/\n/g, '<br>') + '</p>');
+    }
+    return ut.join('');
+  }
+
   function iDag() {
     var d = new Date();
     function to(n) { return (n < 10 ? '0' : '') + n; }
@@ -93,6 +121,9 @@
 
   function lukk() {
     if (!overlegg) return;
+    // Lytteren legges paa i apne(). Uten denne linja blir det en ny lytter per
+    // aapning, som alle overlever overlegget de hoerte til.
+    document.removeEventListener('keydown', paaEscape);
     overlegg.remove();
     overlegg = null;
     ventendeBilder = [];
@@ -210,11 +241,13 @@
       return;
     }
 
+    // tittel og slug lages av den RAA teksten over (lagSlug og lengdesjekken),
+    // og escapes foerst her, paa vei inn i det som lagres.
     var innlegg = {
       slug: slug,
-      tittel: tittel,
-      ingress: felt('ingress').value.trim(),
-      brodtekst: felt('brodtekst').value.trim(),
+      tittel: escapeHtml(tittel),
+      ingress: escapeHtml(felt('ingress').value.trim()),
+      brodtekst: tekstTilHtml(felt('brodtekst').value),
       bilde: bildeSti,
       dato: felt('dato').value || iDag(),
       _kladd: !!felt('kladd').checked
