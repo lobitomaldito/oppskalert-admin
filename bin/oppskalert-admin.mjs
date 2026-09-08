@@ -8,6 +8,8 @@ import { build } from '../build/index.mjs';
 import { trygStI, trygSidenavn } from '../api/_stier.mjs';
 import { checkPin } from '../api/_rateLimit.mjs';
 import { kjor as kjorDoctor } from '../doctor/index.mjs';
+import { flett } from '../api/_samling.mjs';
+import { slugErGyldig } from '../build/samling.mjs';
 import { lesProsjekt } from './_les-prosjekt.mjs';
 import { lesToken } from './_skall.mjs';
 import { kobler } from './_kobler.mjs';
@@ -186,12 +188,36 @@ function dev() {
           writeFileSync(join(rot, trygg), Buffer.from(String(b.data).split(',').pop(), 'base64'));
         }
 
+        // samling er valgfri, samme sperre som produksjon (api/save.js): finnes
+        // den ikke i kroppen, oppfoerer resten seg akkurat som foer den fantes.
+        let samlingSti = null;
+        const { samling } = kropp;
+        if (samling !== undefined && samling !== null) {
+          if (typeof samling !== 'object' || Array.isArray(samling)) {
+            return svar(400, { ok: false, error: 'Ugyldig samling.' });
+          }
+          const samlingNavn = trygSidenavn(samling.navn);
+          if (!samlingNavn) return svar(400, { ok: false, error: 'Ugyldig navn på samlingen.' });
+          const innlegg = samling.innlegg;
+          if (!innlegg || typeof innlegg !== 'object' || Array.isArray(innlegg) || !slugErGyldig(innlegg.slug)) {
+            return svar(400, { ok: false, error: 'Ugyldig slug på innlegget.' });
+          }
+          samlingSti = join(rot, 'content/samlinger', `${samlingNavn}.json`);
+        }
+
         const sidenavn = trygSidenavn(kropp.page);
         if (!sidenavn) return svar(400, { ok: false, error: 'Ugyldig sidenavn.' });
         mkdirSync(join(rot, 'content'), { recursive: true });
         const f = join(rot, 'content', `${sidenavn}.json`);
         const naa = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {};
         writeFileSync(f, JSON.stringify({ ...naa, ...kropp.edits }, null, 2));
+
+        if (samlingSti) {
+          mkdirSync(join(rot, 'content/samlinger'), { recursive: true });
+          const naaSamling = existsSync(samlingSti) ? JSON.parse(readFileSync(samlingSti, 'utf8')) : null;
+          writeFileSync(samlingSti, JSON.stringify(flett(naaSamling, samling.innlegg), null, 2));
+        }
+
         build({ rot });
         svar(200, { ok: true, rebuildMs: 400, note: 'Bygget lokalt' });
       });
