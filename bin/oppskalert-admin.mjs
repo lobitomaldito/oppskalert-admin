@@ -50,7 +50,8 @@ function init() {
   console.log('\nTo ting du maa gjore selv:');
   console.log('  1. Legg <link rel="stylesheet" href="/css/tokens.css"> i <head> i hver mal.');
   console.log('     Uten den kjorer admin-baren paa fallbackfarger.');
-  console.log('  2. Sett ADMIN_PIN, GITHUB_REPO og GITHUB_TOKEN i Vercel.');
+  console.log('  2. Kjor `oppskalert-admin kobler`, som setter ADMIN_PIN, GITHUB_REPO,');
+  console.log('     GITHUB_TOKEN og ADMIN_REBUILD_MS i Vercel for deg.');
 }
 
 // Kjoerer reglene og skriver resultatet, uten aa avslutte prosessen selv.
@@ -107,7 +108,12 @@ async function koblerCmd() {
     lesToken,
     rot,
     malByggetid,
-    hent: (url) => fetch(url)
+    hent: (url, opt) => fetch(url, opt),
+    // Samme fil og format som `tid`-kommandoen skriver for haand.
+    skrivAdminTid: (ms) => {
+      const fil = join(rot, 'admin-tid.json');
+      writeFileSync(fil, JSON.stringify({ rebuildMs: ms, malt: new Date().toISOString() }, null, 2) + '\n');
+    }
   };
 
   let feilet = false;

@@ -73,24 +73,34 @@ export function lesLinjeSkjult(strommer = process) {
       stdin.removeListener('data', paaData);
     };
 
-    function paaData(tegn) {
-      if (tegn === '\u0003') {
-        rydd();
-        stdout.write('\n');
-        reject(new Error('Avbrutt med Ctrl+C. Ingenting er satt.'));
-        return;
+    // I raw mode leverer stdin en innliming som EN chunk med flere tegn,
+    // ikke ett tegn av gangen. En chunk kan derfor baade starte midt i
+    // bufferet og baere linjeskiftet et stykke ut i seg selv, siden et
+    // token limt inn fra en fil eller et editorvindu har linjeskiftet med
+    // paa slutten. Vi maa derfor loepe tegn for tegn INNI hver chunk og
+    // stoppe ved forste treff, i stedet for aa sammenligne hele chunken mot
+    // ett enkelt tegn (det matcher aldri, og lot prompten henge for evig
+    // paa en limt verdi).
+    function paaData(del) {
+      for (const tegn of String(del)) {
+        if (tegn === '\u0003') {
+          rydd();
+          stdout.write('\n');
+          reject(new Error('Avbrutt med Ctrl+C. Ingenting er satt.'));
+          return;
+        }
+        if (tegn === '\r' || tegn === '\n') {
+          rydd();
+          stdout.write('\n');
+          resolve(bokstaver);
+          return;
+        }
+        if (tegn === '\u007f' || tegn === '\b') {
+          bokstaver = bokstaver.slice(0, -1);
+          continue;
+        }
+        bokstaver += tegn;
       }
-      if (tegn === '\r' || tegn === '\n') {
-        rydd();
-        stdout.write('\n');
-        resolve(bokstaver);
-        return;
-      }
-      if (tegn === '\u007f' || tegn === '\b') {
-        bokstaver = bokstaver.slice(0, -1);
-        return;
-      }
-      bokstaver += tegn;
     }
 
     stdin.on('data', paaData);
@@ -110,5 +120,18 @@ export async function lesToken(lesLinje = lesLinjeSkjult) {
 export function settEnv(kjor, navn, verdi, sensitiv) {
   const args = ['env', 'add', navn, 'production', '--force', '--yes'];
   if (sensitiv) args.push('--sensitive');
-  return kjor('vercel', args, { input: verdi });
+  if (!sensitiv) return kjor('vercel', args, { input: verdi });
+
+  try {
+    return kjor('vercel', args, { input: verdi });
+  } catch (e) {
+    // Verdien ligger ikke i argv, saa den havner bare i feilmeldingen hvis
+    // vercel selv ekker den i stderr. Ingen kjent sti gjor det i dag, men
+    // det er den siste lekkasjeveien, saa den vaskes bort foer feilen gaar
+    // videre og eventuelt havner i en logg.
+    if (verdi && typeof e.message === 'string') {
+      e.message = e.message.split(verdi).join('***');
+    }
+    throw e;
+  }
 }

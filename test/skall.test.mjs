@@ -44,3 +44,26 @@ test('sensitiv verdi merkes sensitiv', () => {
   settEnv((c, a) => { sett = a; return ''; }, 'GITHUB_TOKEN', 'x', true);
   assert.ok(sett.includes('--sensitive'));
 });
+
+test('feiler en sensitiv settEnv, vaskes verdien ut av feilmeldingen', () => {
+  const verdi = 'github_pat_HEMMELIG';
+  const kjorSomFeiler = () => {
+    throw new Error(`Command failed: vercel env add GITHUB_TOKEN\n${verdi} ble avvist av vercel`);
+  };
+  assert.throws(
+    () => settEnv(kjorSomFeiler, 'GITHUB_TOKEN', verdi, true),
+    (e) => {
+      assert.equal(e.message.includes(verdi), false, 'tokenet laa fortsatt i feilmeldingen');
+      assert.ok(e.message.includes('***'), 'feilmeldingen ble ikke vasket');
+      return true;
+    }
+  );
+});
+
+test('feiler en ikke-sensitiv settEnv, rulles feilen videre uendret', () => {
+  const kjorSomFeiler = () => { throw new Error('Command failed: noe gikk galt'); };
+  assert.throws(
+    () => settEnv(kjorSomFeiler, 'GITHUB_REPO', 'eier/repo', false),
+    /Command failed: noe gikk galt/
+  );
+});

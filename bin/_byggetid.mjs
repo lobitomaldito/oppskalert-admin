@@ -68,9 +68,16 @@ export async function malByggetid(io) {
   writeFileSync(merkeFull, `${verdi}\n`);
 
   kjor('git', ['add', MERKE_RELATIV], {});
-  kjor('git', ['commit', '-m', 'Mal byggetid\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>'], {});
+  // -- <sti> etter meldingen: commiter KUN merkefila, uansett hva annet som
+  // matte staa staget fra foer i kundens arbeidstre. Uten pathspec-en tar
+  // `git commit` med hele indeksen, og alt annet brukeren har staget blir
+  // pushet ut sammen med maalingen.
+  kjor('git', ['commit', '-m', 'Mal byggetid\n\nCo-Authored-By: Claude Opus 5 <noreply@anthropic.com>', '--', MERKE_RELATIV], {});
   kjor('git', ['push'], {});
 
+  // Cache-buster: merkeverdien er tilfeldig, saa en gammel, cachet kopi av
+  // .byggemerke kan aldri gi en maaling som er FOR KORT, bare en som er for
+  // lang eller som tidsavbrytes. ?t= og no-store fjerner den feilkilden helt.
   const url = `https://${domene}/.byggemerke`;
   const start = naa();
   let ventetid = FORSTE_VENT_MS;
@@ -78,7 +85,7 @@ export async function malByggetid(io) {
   for (;;) {
     let treff = false;
     try {
-      const svar = await hent(url);
+      const svar = await hent(`${url}?t=${Date.now()}`, { cache: 'no-store' });
       if (svar && svar.ok !== false) {
         const tekst = typeof svar.text === 'function' ? await svar.text() : String(svar);
         treff = tekst.trim() === verdi;

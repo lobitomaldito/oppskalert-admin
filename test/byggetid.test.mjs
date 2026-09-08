@@ -90,6 +90,30 @@ test('skriver merkefila under static/ med en fersk verdi', async () => {
   assert.match(lesMerke(rot), /^[0-9a-f]{18}$/);
 });
 
+test('commit-kallet tar med kun merkefila, ikke resten av det staged', async () => {
+  const rot = prosjekt();
+  const io = lagIo(rot, { hent: async () => ({ ok: true, text: async () => lesMerke(rot) }) });
+  await malByggetid(io);
+  const commitKall = io.kjort.find((k) => k.cmd === 'git' && k.args[0] === 'commit');
+  assert.ok(commitKall, 'fant ikke git commit-kallet');
+  assert.ok(commitKall.args.includes(join('static', '.byggemerke')), 'commit-kallet peker ikke paa merkefila');
+});
+
+test('poller med cache-buster, saa en gammel cachet kopi ikke gir en for kort maaling', async () => {
+  const rot = prosjekt();
+  const urler = [];
+  const io = lagIo(rot, {
+    hent: async (url, opt) => {
+      urler.push({ url, opt });
+      return { ok: true, text: async () => lesMerke(rot) };
+    }
+  });
+  await malByggetid(io);
+  assert.equal(urler.length, 1);
+  assert.match(urler[0].url, /\?t=\d+$/);
+  assert.equal(urler[0].opt?.cache, 'no-store');
+});
+
 test('committer og pusher merkefila, i den rekkefolgen', async () => {
   const rot = prosjekt();
   const io = lagIo(rot, { hent: async () => ({ ok: true, text: async () => lesMerke(rot) }) });

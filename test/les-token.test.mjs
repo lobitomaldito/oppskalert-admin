@@ -92,6 +92,40 @@ test('Ctrl+C forkaster og rydder raw mode, i stedet for aa henge', async () => {
   assert.equal(stdin.listenerCount('data'), 0);
 });
 
+// Granskerens funn: raw mode leverer en innliming som EN chunk, ikke ett
+// tegn av gangen. skriv()-hjelperen over emitter ett tegn per 'data', saa
+// den simulerer tasting og fanget ikke dette. Disse testene emitter hele
+// den limte teksten (inkludert linjeskiftet) i EN 'data'-hendelse, slik en
+// ekte paste fra terminalen ville gjort.
+test('en innlimt verdi med \\n i samme chunk avsluttes med en gang, ikke henger', async () => {
+  const stdin = lagFalskTtyStdin();
+  const stdout = lagFalskStdout();
+  const p = lesLinjeSkjult({ stdin, stdout });
+  stdin.emit('data', 'github_pat_HEMMELIG\n');
+  assert.equal(await p, 'github_pat_HEMMELIG');
+  // Raw mode ble baade satt og ryddet opp, ellers henger terminalen igjen.
+  assert.deepEqual(stdin.rawModeKall, [true, false]);
+  assert.equal(stdin.listenerCount('data'), 0);
+});
+
+test('en innlimt verdi med \\r i samme chunk avsluttes med en gang', async () => {
+  const stdin = lagFalskTtyStdin();
+  const stdout = lagFalskStdout();
+  const p = lesLinjeSkjult({ stdin, stdout });
+  stdin.emit('data', 'github_pat_B\r');
+  assert.equal(await p, 'github_pat_B');
+  assert.deepEqual(stdin.rawModeKall, [true, false]);
+});
+
+test('en chunk med flere tegn foer linjeskiftet forkaster resten av chunken etter treff', async () => {
+  const stdin = lagFalskTtyStdin();
+  const stdout = lagFalskStdout();
+  const p = lesLinjeSkjult({ stdin, stdout });
+  // Alt etter \r i samme chunk skal ignoreres, ikke limes inn i neste linje.
+  stdin.emit('data', 'github_pat_A\rsoppel-etter-linjeskiftet');
+  assert.equal(await p, 'github_pat_A');
+});
+
 test('ikke-TTY stdin (pipe) faller tilbake til vanlig lesing', async () => {
   const stdin = new Readable({ read() {} });
   stdin.isTTY = false;

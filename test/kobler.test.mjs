@@ -5,7 +5,7 @@ import { kobler } from '../bin/_kobler.mjs';
 
 function lagIo(overstyr = {}) {
   const io = {
-    skrevet: [], kjort: [], aapnet: [],
+    skrevet: [], kjort: [], aapnet: [], tidSkrevet: [],
     kjor(cmd, args, opt) {
       io.kjort.push({ cmd, args, opt });
       if (cmd === 'git') return 'https://github.com/eier/kundeside.git\n';
@@ -18,6 +18,7 @@ function lagIo(overstyr = {}) {
     lesToken: async () => 'github_pat_HEMMELIG',
     rot: '/tmp/x',
     malByggetid: async () => 48000,
+    skrivAdminTid: (ms) => io.tidSkrevet.push(ms),
     ...overstyr
   };
   return io;
@@ -75,6 +76,49 @@ test('github-siden aapnes med rettighetene forklart foerst', async () => {
   assert.equal(io.aapnet.length, 1);
   assert.match(io.aapnet[0], /github\.com\/settings\/personal-access-tokens/);
   assert.ok(io.skrevet.some((l) => /Contents/i.test(l)));
+});
+
+test('bekreftelsen forteller at kommandoen skriver static/.byggemerke, committer og pusher', async () => {
+  const io = lagIo();
+  await kobler(io);
+  assert.ok(io.skrevet.some((l) => l.includes('static/.byggemerke')), 'nevner ikke filnavnet');
+  assert.ok(io.skrevet.some((l) => /commit/i.test(l) && /push/i.test(l)), 'nevner ikke commit/push');
+});
+
+test('skriver admin-tid.json med den maalte byggetiden, saa doctor ikke motsier seg selv', async () => {
+  const io = lagIo();
+  await kobler(io);
+  assert.deepEqual(io.tidSkrevet, [48000]);
+});
+
+test('etter ADMIN_REBUILD_MS er satt trigges et nytt bygg med en tom commit og push', async () => {
+  const io = lagIo();
+  const res = await kobler(io);
+  const gitKall = io.kjort.filter((k) => k.cmd === 'git').map((k) => k.args);
+  // Forste git-kall (i lesRepo) er 'remote get-url origin'. Deretter skal
+  // det komme en tom commit og en push, for at ADMIN_REBUILD_MS skal gjelde
+  // i deployen som kommer etter at den ble satt (Vercel fryser env per deploy).
+  assert.deepEqual(gitKall.slice(1).map((a) => a[0]), ['commit', 'push']);
+  assert.ok(gitKall[1].includes('--allow-empty'));
+  assert.equal(res.deployTrigget, true);
+  assert.ok(io.skrevet.some((l) => /nytt bygg/i.test(l) && /trigget/i.test(l)));
+});
+
+test('feiler pushen som trigger deployen: sier eksplisitt at verdien gjelder foerst etter neste deploy', async () => {
+  const io = lagIo({
+    kjor(cmd, args) {
+      if (cmd === 'git' && (args || []).includes('--allow-empty')) throw new Error('push feilet');
+      if (cmd === 'git') return 'https://github.com/eier/kundeside.git\n';
+      return '';
+    }
+  });
+  const res = await kobler(io);
+  assert.equal(res.deployTrigget, false);
+  assert.equal(res.byggetidMs, 48000, 'ADMIN_REBUILD_MS skal vaere satt i Vercel selv om deployen ikke ble trigget');
+  assert.ok(
+    io.skrevet.some((l) => /gjelder foerst fra neste deploy/i.test(l)),
+    'sier ikke eksplisitt at verdien foerst gjelder etter neste deploy'
+  );
 });
 
 test('en feilende env add stopper flyten og sier hvilken', async () => {
