@@ -5,7 +5,8 @@ import { join, isAbsolute, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'node-html-parser';
 import { lagOppslag } from './mirror.mjs';
-import { bakeTekst, bakeBilder, bakeLister } from './bake.mjs';
+import { bakeTekst, bakeBilder, bakeLister, settStilProp } from './bake.mjs';
+import { lesSamlinger, synlige } from './samling.mjs';
 
 const EDITOR = fileURLToPath(new URL('../editor/', import.meta.url));
 
@@ -25,6 +26,87 @@ const EDITOR = fileURLToPath(new URL('../editor/', import.meta.url));
 // detaljteksten i sidefloten.
 const PUBLIKUMSSTIL = '<style>.is-hidden-item{display:none}.txt-lg{font-size:1.25em}.txt-sm{font-size:0.85em}' +
   '[data-list-detail]{display:none}body.adm-editing [data-list-detail]{display:block}</style>';
+
+// Skriver ett innleggs felt inn i innleggsmalen. Samme to attributt-navn
+// som resten av motoren (data-edit/data-edit-image), bare med -innlegg for aa
+// gjoere det tydelig at kilden er en samling og ikke sidas egen JSON.
+function bakInnlegg(dom, post) {
+  for (const el of dom.querySelectorAll('[data-innlegg]')) {
+    const felt = el.getAttribute('data-innlegg');
+    if (post[felt] != null) el.set_content(post[felt]);
+  }
+  for (const el of dom.querySelectorAll('[data-innlegg-image]')) {
+    const felt = el.getAttribute('data-innlegg-image');
+    const url = post[felt];
+    if (url == null) continue;
+    if (el.tagName === 'IMG') el.setAttribute('src', url);
+    else settStilProp(el, 'background-image', `url('${url}')`);
+  }
+}
+
+// Fyller listeseksjonen [data-samling="navn"] paa foreldresiden med de synlige
+// innleggene i den samlingen, nyeste dato foerst. Seksjonen laases med samme
+// attributt som resten av motoren bruker for skrivebeskyttede speil
+// (data-content-src, sjekket av editor/edit.js sin inMirror()): kilden er
+// samlingen, og et innlegg redigeres der, ikke i lista paa foreldresiden.
+function bakSamlinger(dom, samlinger) {
+  let treff = 0;
+
+  for (const beholder of dom.querySelectorAll('[data-samling]')) {
+    const navn = beholder.getAttribute('data-samling');
+    beholder.setAttribute('data-content-src', `samling:${navn}`);
+
+    const liste = samlinger[navn];
+    if (!Array.isArray(liste) || liste.length === 0) continue;
+
+    const maler = beholder.querySelectorAll('[data-list-item]');
+    if (maler.length === 0) continue;
+
+    const malStreng = maler[0].toString();
+    maler.forEach((el) => el.remove());
+
+    let poster = synlige(liste).slice().sort((a, b) => {
+      const da = String(a.dato || '');
+      const db = String(b.dato || '');
+      if (da === db) return 0;
+      return da > db ? -1 : 1;
+    });
+
+    const antall = beholder.getAttribute('data-samling-antall');
+    if (antall) poster = poster.slice(0, Number(antall));
+
+    poster.forEach((post) => {
+      const rotNode = parse(malStreng);
+      const element = rotNode.querySelector('[data-list-item]');
+      if (!element) return;
+
+      for (const felt of element.querySelectorAll('[data-list-field]')) {
+        const k = felt.getAttribute('data-list-field');
+        if (post[k] != null) felt.set_content(post[k]);
+      }
+
+      for (const felt of element.querySelectorAll('[data-list-image-field]')) {
+        const k = felt.getAttribute('data-list-image-field');
+        if (post[k] == null) continue;
+        if (felt.tagName === 'IMG') {
+          felt.setAttribute('src', post[k]);
+          if (post.tittel) felt.setAttribute('alt', post.tittel);
+        } else {
+          settStilProp(felt, 'background-image', `url('${post[k]}')`);
+        }
+      }
+
+      for (const lenke of element.querySelectorAll('[data-samling-lenke]')) {
+        lenke.setAttribute('href', `/${navn}/${post.slug}/`);
+      }
+
+      beholder.appendChild(element);
+      treff++;
+    });
+  }
+
+  return treff;
+}
 
 export function build(config = {}) {
   const rot = config.rot || process.cwd();
@@ -63,10 +145,15 @@ export function build(config = {}) {
   if (existsSync(STATISK)) cpSync(STATISK, DIST, { recursive: true });
   cpSync(EDITOR, join(DIST, 'admin'), { recursive: true });
 
-  let sider = 0, treff = 0;
+  const samlinger = lesSamlinger(rot, (f) => readFileSync(f, 'utf8'), existsSync, (m) => readdirSync(m));
+
+  let sider = 0, treff = 0, innlegg = 0;
 
   for (const fil of readdirSync(TPL)) {
     if (!fil.endsWith('.html')) continue;
+    // Maler som starter med _ hoerer til en samling (f.eks. _innlegg.html) og
+    // bygges aldri som en egen side. Se lenger ned for hvordan de faktisk brukes.
+    if (fil.startsWith('_')) continue;
     const side = fil.replace(/\.html$/, '');
     const dom = parse(readFileSync(join(TPL, fil), 'utf8'), { comment: true });
     const slaOpp = lagOppslag(lastInnhold(side), lastInnhold);
@@ -74,6 +161,7 @@ export function build(config = {}) {
     treff += bakeTekst(dom, slaOpp);
     treff += bakeBilder(dom, slaOpp);
     treff += bakeLister(dom, slaOpp);
+    treff += bakSamlinger(dom, samlinger);
 
     const head = dom.querySelector('head');
     if (head) head.insertAdjacentHTML('beforeend', PUBLIKUMSSTIL);
@@ -84,6 +172,32 @@ export function build(config = {}) {
     sider++;
   }
 
-  console.log(`✓ Bygde ${sider} sider med ${treff} innholdstreff -> dist/`);
-  return { sider, treff };
+  // En side per innlegg, fra templates/_innlegg.html. Mangler samlingsmappa
+  // helt, er samlinger {} og loekka under gjoer ingenting. Mangler bare malen
+  // (en samling finnes, men ingen _innlegg.html), skal bygget IKKE kaste: det
+  // er doctor sin jobb aa si fra om det.
+  const malInnleggSti = join(TPL, '_innlegg.html');
+  if (existsSync(malInnleggSti)) {
+    const malRaw = readFileSync(malInnleggSti, 'utf8');
+    for (const [navn, liste] of Object.entries(samlinger)) {
+      for (const post of synlige(liste)) {
+        const dom = parse(malRaw, { comment: true });
+        bakInnlegg(dom, post);
+
+        const head = dom.querySelector('head');
+        if (head) head.insertAdjacentHTML('beforeend', PUBLIKUMSSTIL);
+
+        let html = dom.toString();
+        if (!/^\s*<!doctype/i.test(html)) html = `<!DOCTYPE html>\n${html}`;
+
+        const utMappe = join(DIST, navn, post.slug);
+        mkdirSync(utMappe, { recursive: true });
+        writeFileSync(join(utMappe, 'index.html'), html);
+        innlegg++;
+      }
+    }
+  }
+
+  console.log(`✓ Bygde ${sider} sider (${innlegg} innlegg) med ${treff} innholdstreff -> dist/`);
+  return { sider, treff, innlegg };
 }
