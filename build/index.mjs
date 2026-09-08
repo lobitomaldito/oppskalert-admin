@@ -108,6 +108,37 @@ function bakSamlinger(dom, samlinger) {
   return treff;
 }
 
+// Skriver eller utvider dist/sitemap.xml med innleggssidenes stier. Kalles
+// aldri naar stier er tom, saa et prosjekt uten samling verken lager en ny
+// fil eller rorer en static/sitemap.xml som allerede ble kopiert som den er
+// (se cpSync(STATISK, DIST, ...) over).
+//
+// Motoren har ingen domene-konfigurasjon noe sted (bevisst, se de relative
+// stiene ellers i denne fila). Finnes det en sitemap fra foer med absolutte
+// <loc>-URL-er, gjenbrukes noeyaktig samme skjema+host, lest ut av den
+// forste <loc>-verdien. Finnes ingen sitemap fra foer, skrives rot-relative
+// <loc>-verdier, samme konvensjon som data-samling-lenke sine href-er.
+function oppdaterSitemap(DIST, stier) {
+  if (stier.length === 0) return;
+
+  const sitemapSti = join(DIST, 'sitemap.xml');
+  if (existsSync(sitemapSti)) {
+    let xml = readFileSync(sitemapSti, 'utf8');
+    const forsteLoc = xml.match(/<loc>([^<]+)<\/loc>/);
+    const domene = forsteLoc ? (forsteLoc[1].match(/^https?:\/\/[^/]+/) || [''])[0] : '';
+    const nyeUrler = stier.map((s) => `<url><loc>${domene}${s}</loc></url>`).join('');
+    // Ingen </urlset>-tag betyr en oedelagt fil fra foer: xml staar da uroert,
+    // ingenting skrives, samme "krasj aldri paa daarlig innhold"-prinsipp som
+    // resten av bygget.
+    if (xml.includes('</urlset>')) xml = xml.replace('</urlset>', `${nyeUrler}</urlset>`);
+    writeFileSync(sitemapSti, xml);
+  } else {
+    const urler = stier.map((s) => `<url><loc>${s}</loc></url>`).join('');
+    writeFileSync(sitemapSti,
+      `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urler}</urlset>`);
+  }
+}
+
 export function build(config = {}) {
   const rot = config.rot || process.cwd();
   const sti = (s, standard) => {
@@ -161,6 +192,7 @@ export function build(config = {}) {
   }
 
   let sider = 0, treff = 0, innlegg = 0;
+  const innleggStier = [];
 
   for (const fil of readdirSync(TPL)) {
     if (!fil.endsWith('.html')) continue;
@@ -207,9 +239,15 @@ export function build(config = {}) {
         mkdirSync(utMappe, { recursive: true });
         writeFileSync(join(utMappe, 'index.html'), html);
         innlegg++;
+        innleggStier.push(`/${navn}/${post.slug}/`);
       }
     }
   }
+
+  // Etter alle innleggssidene er skrevet, saa sitemap-en teller faktisk
+  // bygde stier og ikke bare content/samlinger/-JSON-en (et innlegg med
+  // ugyldig slug ble filtrert bort lenger opp og skal ikke faa en <loc>).
+  oppdaterSitemap(DIST, innleggStier);
 
   console.log(`✓ Bygde ${sider} sider (${innlegg} innlegg) med ${treff} innholdstreff -> dist/`);
   return { sider, treff, innlegg };

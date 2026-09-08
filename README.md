@@ -306,6 +306,66 @@ resten. Tallet er antallet skjulte elementer, ordet kommer fra
 Utvidet bytter knappen til «Vis færre». Admin ser alltid alle
 elementene, uten kollaps.
 
+## Samlinger (blogg, aktuelt, siste nytt)
+
+Valgfritt, og helt av til noen faktisk oppretter `content/samlinger/`. Uten den
+mappa bygger og oppfører motoren seg nøyaktig som før, og ingen av admin-flatene
+under vises.
+
+```
+content/samlinger/aktuelt.json   ett innlegg per objekt i en tabell
+templates/_innlegg.html          én mal, delt av alle innlegg i alle samlinger
+```
+
+Navnet på `.json`-fila (uten endelsen) blir samlingens navn og URL-segment:
+`aktuelt.json` bygger sidene på `/aktuelt/<slug>/`. Én mal per prosjekt holder
+til vi ser et kundebehov for flere.
+
+Et innlegg:
+
+```json
+{
+  "slug": "nytt-bygg-i-sentrum",
+  "tittel": "Nytt bygg i sentrum",
+  "ingress": "Kort inngang, en til to setninger.",
+  "brodtekst": "Den lange teksten.",
+  "bilde": "/assets/uploads/nytt-bygg.jpg",
+  "dato": "2026-03-01",
+  "_kladd": false
+}
+```
+
+`_kladd: true` gjør at innlegget ikke havner i `dist/` i det hele tatt, verken
+som egen side eller i listeseksjonen på foreldresiden. Det er en annen
+mekanisme enn `_skjult` på et vanlig listeelement, som bare gjemmes med CSS: et
+utkast bygges aldri.
+
+Malen instrumenteres med `data-innlegg="felt"` og `data-innlegg-image="felt"`,
+samme prinsipp som `data-edit`/`data-edit-image` på en vanlig side, bare med
+kilden i innleggets egne felt i stedet for sidas JSON.
+
+Listeseksjonen på foreldresiden (typisk forsiden):
+
+| Attributt | Virkning |
+|---|---|
+| `data-samling="navn"` | Beholder for lista. `navn` matcher `.json`-filens navn uten endelse. |
+| `data-list-item` | Ett kort per innlegg, samme mal-per-indeks-prinsipp som `data-editable-list`. |
+| `data-list-field="felt"` | Redigerbar tekst inne i kortet. |
+| `data-list-image-field="felt"` | Bilde inne i kortet. |
+| `data-samling-lenke` | Lenken til innleggets egen side. `href` settes automatisk. |
+| `data-samling-antall="N"` | Begrenser lista til de N nyeste. Utelates attributtet, vises hele samlingen. |
+
+`editor/skjema.js` gir klienten «Nytt innlegg»-knappen og skjemaet den åpner.
+Filen kopieres til `dist/admin/` av bygget, men må lenkes i malen manuelt,
+akkurat som `detail-modal.js` og `kollaps.js`:
+
+```html
+<script src="/admin/skjema.js" defer></script>
+```
+
+Uten scripttaggen vises aldri «Nytt innlegg»-knappen, selv om samlingen finnes
+og malen er instrumentert.
+
 ## Kjente begrensninger
 
 **IP-sperren teller per funksjonsinstans.** Fem feil PIN fra samme IP gir 15
