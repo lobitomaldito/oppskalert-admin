@@ -40,9 +40,13 @@ export function lesRepo(kjor) {
 //   kaster. En pipe har uansett ingen skjerm aa ekko til, saa vi leser
 //   linja raatt med readline (terminal: false slaar av ekko naar det ikke
 //   er en terminal likevel).
-export function lesLinjeSkjult() {
+//
+// `strommer` er injiserbar (default: den ekte process), saa denne
+// sikkerhetskritiske funksjonen kan testes med en falsk stdin i stedet for
+// aa roere terminalen tester kjoerer i.
+export function lesLinjeSkjult(strommer = process) {
   return new Promise((resolve, reject) => {
-    const { stdin, stdout } = process;
+    const { stdin, stdout } = strommer;
 
     if (!stdin.isTTY) {
       const rl = createInterface({ input: stdin, terminal: false });
