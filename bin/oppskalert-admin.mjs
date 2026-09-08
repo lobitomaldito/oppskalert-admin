@@ -2,11 +2,16 @@
 import { writeFileSync, readFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
 import { join, extname, sep } from 'node:path';
 import { createServer } from 'node:http';
+import { execFileSync, execFile } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import { build } from '../build/index.mjs';
 import { trygStI, trygSidenavn } from '../api/_stier.mjs';
 import { checkPin } from '../api/_rateLimit.mjs';
-import { kjor } from '../doctor/index.mjs';
+import { kjor as kjorDoctor } from '../doctor/index.mjs';
 import { lesProsjekt } from './_les-prosjekt.mjs';
+import { lesToken } from './_skall.mjs';
+import { kobler } from './_kobler.mjs';
+import { malByggetid } from './_byggetid.mjs';
 
 const [, , kommando, sti] = process.argv;
 const rot = sti || process.cwd();
@@ -48,12 +53,74 @@ function init() {
   console.log('  2. Sett ADMIN_PIN, GITHUB_REPO og GITHUB_TOKEN i Vercel.');
 }
 
-function doctor() {
-  const { feil, varsler } = kjor(lesProsjekt(rot));
+// Kjoerer reglene og skriver resultatet, uten aa avslutte prosessen selv.
+// Delt mellom den frittstaaende `doctor`-kommandoen og `kobler`, som kjoerer
+// den til slutt uansett utfall, saa avslutningskoden kan kombineres med
+// kobler sin egen.
+function kjorDoctorOgSkriv() {
+  const { feil, varsler } = kjorDoctor(lesProsjekt(rot));
   for (const v of varsler) console.log(`  varsel  ${v.fil}:${v.linje}  [${v.regel}] ${v.melding}`);
   for (const f of feil) console.log(`  FEIL    ${f.fil}:${f.linje}  [${f.regel}] ${f.melding}`);
   if (!feil.length) console.log(`\nIngen feil. ${varsler.length} varsel(er) til gjennomlesing.`);
-  process.exit(feil.length ? 1 : 0);
+  return feil.length;
+}
+
+function doctor() {
+  process.exit(kjorDoctorOgSkriv() ? 1 : 0);
+}
+
+// Kjoerer git/vercel synkront og gir stdout tilbake som tekst. Verdien til
+// et sensitivt kall (tokenet) sendes via opt.input, aldri via args, saa den
+// aldri havner i argv, i ps, eller i shell-historikken. execFileSync tar
+// ikke et shell i bruk, saa argumentene trenger ingen escaping.
+function kjorProsess(cmd, args, opt = {}) {
+  return execFileSync(cmd, args, { cwd: rot, encoding: 'utf8', input: opt.input });
+}
+
+// Vanlig, synlig ja/nei-spoersmaal. Ikke i slekt med lesToken: dette er en
+// bekreftelse, ikke noe som skal skjules.
+function spor(sporsmal) {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`${sporsmal} (j/n) `, (svar) => {
+      rl.close();
+      resolve(/^j(a)?$/i.test(String(svar).trim()));
+    });
+  });
+}
+
+// Aapner default-nettleseren paa GitHub-skjemaet. execFile med en argumentliste,
+// ikke et shell-uttrykk, saa url-en ikke trenger escaping.
+function aapne(url) {
+  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
+  const args = process.platform === 'win32' ? ['/c', 'start', '""', url] : [url];
+  execFile(cmd, args, () => {});
+}
+
+async function koblerCmd() {
+  const io = {
+    kjor: kjorProsess,
+    spor,
+    skriv: (linje) => console.log(linje),
+    aapne,
+    naa: () => Date.now(),
+    lesToken,
+    rot,
+    malByggetid,
+    hent: (url) => fetch(url)
+  };
+
+  let feilet = false;
+  try {
+    await kobler(io);
+  } catch (e) {
+    console.error(`\nFeil: ${e.message}`);
+    feilet = true;
+  }
+
+  console.log('\nKjoerer doctor, saa du vet om noe mangler foer lenken gaar til kunden:\n');
+  const feilTelling = kjorDoctorOgSkriv();
+  process.exit(feilet || feilTelling ? 1 : 0);
 }
 
 function tid() {
@@ -147,9 +214,9 @@ function dev() {
   }).listen(PORT, '127.0.0.1', () => console.log(`Kjoerer paa http://localhost:${PORT} (PIN ${PIN})`));
 }
 
-const kommandoer = { init, doctor, tid, dev };
+const kommandoer = { init, doctor, tid, dev, kobler: koblerCmd };
 if (!kommandoer[kommando]) {
-  console.log('Bruk: oppskalert-admin <init|doctor|tid|dev> [sti]');
+  console.log('Bruk: oppskalert-admin <init|doctor|tid|dev|kobler> [sti]');
   process.exit(1);
 }
 kommandoer[kommando]();

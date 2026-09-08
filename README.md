@@ -113,6 +113,52 @@ npx oppskalert-admin tid 62000    # skriver admin-tid.json med den målte verdie
 Sett den samme verdien i Vercel. En nedtelling som går ut før siden er klar leser
 som en feil, og da trykker klienten Publiser en gang til.
 
+## `kobler`: koble en side til admin-panelet
+
+```bash
+oppskalert-admin kobler [sti]
+```
+
+Setter de fire miljøvariablene over i Vercel, på riktig prosjekt, uten å lime
+inn i fire felter i et nettgrensesnitt. Forutsetter at prosjektet allerede er
+lenket med `vercel link`, og at det har en GitHub-remote (`git remote get-url
+origin`).
+
+| Variabel | Hvordan den settes |
+|---|---|
+| `ADMIN_PIN` | genereres, seks tilfeldige siffer |
+| `GITHUB_REPO` | leses fra git sin origin-remote |
+| `GITHUB_TOKEN` | limes inn av deg, se under |
+| `ADMIN_REBUILD_MS` | måles: en merkefil committes, pushes, og kommandoen poller den
+  live siden til den nye verdien dukker opp der |
+
+Kommandoen viser hva den vil gjøre og venter på en bekreftelse før den setter
+noe som helst. Til slutt kjører den `doctor` automatisk og skriver resultatet,
+så du vet om noe mangler før lenken går til kunden.
+
+**Tokenet er det ene manuelle steget.** GitHub har ikke noe endepunkt for å
+lage et fine-grained tilgangstoken, så det må lages for hånd i nettleseren.
+De to veiene rundt det er begge dårligere sikkerhet: gjenbruk av ditt
+personlige token gir hver kundeside skrivetilgang til alt kontoen din eier
+(lekker én side, ryker alle), og en delt GitHub-app må ha privatnøkkelen sin
+liggende i hvert eneste kundeprosjekt (lekker én, kan angriperen lage tokens
+for samtlige). Et fine-grained token per kundeside begrenser skaden ved
+lekkasje til den ene siden.
+
+Kommandoen åpner GitHub-skjemaet for deg. Velg:
+
+- **Repository access:** Only select repositories, og velg det ene repoet
+  siden ligger i. Ikke «All repositories».
+- **Permissions:** under Repository permissions, sett **Contents** til
+  **Read and write**. Alt annet kan stå på «No access».
+
+Lim inn det ferdige tokenet når kommandoen ber om det. Det vises ikke mens du
+skriver, og det havner aldri på disk, i en logg eller på en kommandolinje.
+`vercel env add` leser det fra stdin.
+
+PIN-en skrives til skjermen én gang, helt til slutt. Noter den og send den
+videre til kunden. Kommandoen sender den ikke selv.
+
 ## Instrumentering
 
 Attributtene i malen bestemmer hva klienten kan redigere.
@@ -171,6 +217,7 @@ oppskalert-admin init [sti]      # stillaserer build.mjs, api/ og tokens.css
 oppskalert-admin doctor [sti]    # kjører byggereglene, avslutter med 1 ved feil
 oppskalert-admin tid [ms]        # måler og lagrer byggetiden
 oppskalert-admin dev [sti]       # lokal redigeringsløkke på http://localhost:8899
+oppskalert-admin kobler [sti]    # setter miljøvariablene i Vercel, se egen seksjon under
 ```
 
 `doctor` håndhever disse som feil: inline `margin` på et listeelement, CSS som
