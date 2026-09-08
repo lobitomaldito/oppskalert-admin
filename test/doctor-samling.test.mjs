@@ -4,7 +4,12 @@
 // .superpowers/sdd/2026-09-08-oppskalert-admin-samlinger/task-6-brief.md.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import samlingMal, { samlingFelt } from '../doctor/regler/samling.mjs';
+import { kjor, STANDARDREGLER } from '../doctor/index.mjs';
+import { lesProsjekt } from '../bin/_les-prosjekt.mjs';
 
 const p = (filer) => ({ rot: '/x', filer });
 
@@ -83,4 +88,67 @@ test('samling-felt: odelagt json i en samling stopper ikke regelen', () => {
     { sti: 'templates/_innlegg.html', tekst: '<h1 data-innlegg="tittel">X</h1>' },
     { sti: 'content/samlinger/aktuelt.json', tekst: '{ ikke gyldig json' }
   ])));
+});
+
+// --- hele doctor-regelsettet mot et korrekt bygget samling-prosjekt ---
+//
+// Reproduserer funnet fra task-reviewen: dekning-tekst, dekning-bilde og
+// gjentatt-gruppe (doctor/_hjelpere.mjs sin malFiler()) leste tidligere
+// templates/_innlegg.html som en vanlig side og krevde data-edit/
+// data-edit-image der, selv om innleggsmaler bevisst bruker
+// data-innlegg/data-innlegg-image og aldri bygges som egen side (samme
+// underscore-konvensjon som build/index.mjs sin `if (fil.startsWith('_'))
+// continue;`). Denne testen bygger et prosjekt paa disk, akkurat som
+// test/cli.test.mjs sin prosjekt()-fixture, med en EKTE content/samlinger/-
+// fil og en KORREKT instrumentert _innlegg.html (data-innlegg, ikke
+// data-edit), og kjorer hele STANDARDREGLER, ikke bare de to
+// samling-reglene isolert.
+function byggSamlingsprosjekt() {
+  const rot = mkdtempSync(join(tmpdir(), 'oa-samling-'));
+  mkdirSync(join(rot, 'templates'));
+  mkdirSync(join(rot, 'static', 'css'), { recursive: true });
+  mkdirSync(join(rot, 'content', 'samlinger'), { recursive: true });
+
+  writeFileSync(join(rot, 'static', 'css', 'tokens.css'),
+    ':root{--adm-aksent:#1;--adm-flate:#2;--adm-tekst:#3;--adm-fare:#4;--adm-ok:#5}');
+
+  // Forsiden: minimalt, men dekket, saa den ikke selv gir feil paa
+  // dekning-tekst/dekning-bilde. Lenker tokens.css, se admin-tokens.mjs.
+  writeFileSync(join(rot, 'templates', 'index.html'), `<!doctype html>
+<html><head><link rel="stylesheet" href="/css/tokens.css"></head>
+<body>
+<h1 data-edit="forside-tittel">Aktuelt</h1>
+</body></html>`);
+
+  // Innleggsmalen: data-innlegg/data-innlegg-image, IKKE data-edit. Dette er
+  // nettopp instrumenteringen README-seksjonen fra denne tasken dokumenterer.
+  writeFileSync(join(rot, 'templates', '_innlegg.html'), `<!doctype html>
+<html><head><link rel="stylesheet" href="/css/tokens.css"></head>
+<body>
+<h1 data-innlegg="tittel">Tittel</h1>
+<p data-innlegg="ingress">Ingress</p>
+<div data-innlegg="brodtekst">Brodtekst</div>
+<img data-innlegg-image="bilde" src="/img/x.jpg" alt="">
+</body></html>`);
+
+  writeFileSync(join(rot, 'content', 'samlinger', 'aktuelt.json'), JSON.stringify([
+    {
+      slug: 'forste-innlegg',
+      tittel: 'Forste innlegg',
+      ingress: 'En kort ingress.',
+      brodtekst: 'Hele brodteksten.',
+      bilde: '/img/forste.jpg',
+      dato: '2026-01-01',
+      _kladd: false
+    }
+  ]));
+
+  return rot;
+}
+
+test('doctor: et korrekt bygget samling-prosjekt gir null feil-funn i hele STANDARDREGLER', () => {
+  const rot = byggSamlingsprosjekt();
+  const prosjekt = lesProsjekt(rot);
+  const { feil } = kjor(prosjekt, STANDARDREGLER);
+  assert.deepEqual(feil, []);
 });

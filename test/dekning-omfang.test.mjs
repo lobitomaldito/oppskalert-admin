@@ -21,6 +21,19 @@ test('en 404.html-mal ties om, uansett hva den inneholder', () => {
   assert.deepEqual(gruppe.sjekk(p), []);
 });
 
+test('en underscore-prefikset mal (innleggsmal for samlinger) ties om, uansett hva den inneholder', () => {
+  // templates/_innlegg.html bygges aldri som egen side (Task 2, samme
+  // underscore-konvensjon som build/index.mjs), og bruker data-innlegg/
+  // data-innlegg-image i stedet for data-edit/data-edit-image. Uten dette
+  // unntaket krevde dekningsreglene data-edit paa en mal som aldri skal ha
+  // det, og INGEN korrekt bygget samling-prosjekt kunne passere doctor. Se
+  // .superpowers/sdd/2026-09-08-oppskalert-admin-samlinger/task-6-report.md.
+  const p = enMal('templates/_innlegg.html', '<main><h1 data-innlegg="tittel">X</h1><img data-innlegg-image="bilde" src="/a.jpg"></main>');
+  assert.deepEqual(tekst.sjekk(p), []);
+  assert.deepEqual(bilde.sjekk(p), []);
+  assert.deepEqual(gruppe.sjekk(p), []);
+});
+
 test('en mal med meta http-equiv refresh ties om, den er en omdirigeringsstubbe', () => {
   const html = '<html><head><meta http-equiv="refresh" content="0; url=/?edit"></head><main><p>Aapner redigeringsmodus</p></main></html>';
   const p = enMal('templates/admin.html', html);
@@ -40,17 +53,17 @@ test('en vanlig mal som ikke heter 404 og ikke omdirigerer, leses som foer', () 
 // --- 2. Hopp over ren plassholdertekst -----------------------------------
 
 test('en bladnode som bare er {{PLASSHOLDER}} ties om', () => {
-  const p = enMal('templates/_rad.html', '<main><p>{{FORFATTER_BIO}}</p></main>');
+  const p = enMal('templates/rad.html', '<main><p>{{FORFATTER_BIO}}</p></main>');
   assert.deepEqual(tekst.sjekk(p), []);
 });
 
 test('plassholder med anforselstegn rundt seg ties ogsaa om', () => {
-  const p = enMal('templates/_rad.html', '<main><p>«{{ORIGINALTITTEL}}»</p></main>');
+  const p = enMal('templates/rad.html', '<main><p>«{{ORIGINALTITTEL}}»</p></main>');
   assert.deepEqual(tekst.sjekk(p), []);
 });
 
 test('en plassholder som bare er en del av teksten er fortsatt et ekte funn', () => {
-  const p = enMal('templates/_rad.html', '<main><p>Stein-Eriks forhandlingsraad #{{NR}}</p></main>');
+  const p = enMal('templates/rad.html', '<main><p>Stein-Eriks forhandlingsraad #{{NR}}</p></main>');
   assert.equal(tekst.sjekk(p).length, 1);
 });
 
