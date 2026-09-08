@@ -12,10 +12,12 @@ import sidenokkel from './regler/sidenokkel.mjs';
 import dekningTekst, { dekningListe, dekningRammeTekst } from './regler/dekning-tekst.mjs';
 import dekningBilde, { dekningRammeBilde } from './regler/dekning-bilde.mjs';
 import gjentattGruppe from './regler/gjentatt-gruppe.mjs';
+import samlingMal, { samlingFelt } from './regler/samling.mjs';
 
 export const STANDARDREGLER = [
   margin, strongB, tokens, fonts, byggetid, strek, ikkeXmenY, sidenokkel,
-  dekningTekst, dekningListe, dekningRammeTekst, dekningBilde, dekningRammeBilde, gjentattGruppe
+  dekningTekst, dekningListe, dekningRammeTekst, dekningBilde, dekningRammeBilde, gjentattGruppe,
+  samlingMal, samlingFelt
 ];
 
 export function kjor(prosjekt, regler = STANDARDREGLER) {
