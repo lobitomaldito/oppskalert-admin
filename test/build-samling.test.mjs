@@ -100,6 +100,37 @@ test('en samling uten mal bygger resten og kaster ikke', () => {
   assert.equal(res.innlegg, 0);
 });
 
+test('et innlegg uten slug, eller med en usanert slug, kastes ikke, resten av bygget fullfoeres', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', '_innlegg.html'), '<html><body><h1 data-innlegg="tittel">X</h1></body></html>');
+  lagSamling(rot, 'aktuelt', [
+    { tittel: 'Mangler slug', dato: '2026-01-01' },
+    { slug: '../../evil', tittel: 'Sti-forsoek', dato: '2026-01-02' },
+    { slug: 'gyldig-sak', tittel: 'Gyldig sak', dato: '2026-01-03' },
+  ]);
+  let res;
+  assert.doesNotThrow(() => { res = build({ rot }); });
+  assert.equal(res.sider, 1);
+  assert.equal(res.innlegg, 1);
+  assert.ok(existsSync(join(rot, 'dist', 'aktuelt', 'gyldig-sak', 'index.html')));
+  // Ingen fil skal ha havnet utenfor dist-mappa via den usanerte slug-en.
+  assert.ok(!existsSync(join(rot, 'evil', 'index.html')));
+});
+
+test('et innlegg med ugyldig slug faar ingen lenke i samlingslista', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', 'index.html'), malMedSamling(
+    '<article data-list-item><h3 data-list-field="tittel">X</h3><a data-samling-lenke href="#">Les mer</a></article>'));
+  lagSamling(rot, 'aktuelt', [
+    { tittel: 'Mangler slug', dato: '2026-01-01' },
+    { slug: 'gyldig-sak', tittel: 'Gyldig sak', dato: '2026-01-02' },
+  ]);
+  build({ rot });
+  const dom = parse(readFileSync(join(rot, 'dist', 'index.html'), 'utf8'));
+  assert.equal(dom.querySelectorAll('[data-list-item]').length, 1);
+  assert.doesNotMatch(readFileSync(join(rot, 'dist', 'index.html'), 'utf8'), /undefined/);
+});
+
 // --- Task 3: listeseksjonen paa foreldresiden ---
 
 test('samlingslista viser riktig antall elementer', () => {

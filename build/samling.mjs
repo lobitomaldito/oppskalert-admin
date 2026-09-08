@@ -57,3 +57,15 @@ export function lesSamlinger(rot, lesFil, finnesFil, listMappe) {
 export function synlige(innlegg) {
   return innlegg.filter((i) => !i._kladd);
 }
+
+// GYLDIG_SLUG er moensteret lagSlug garantert produserer: smaa bokstaver,
+// tall og enkeltbindestrek mellom, aldri tomt, aldri ".." eller "/". build/index.mjs
+// bruker post.slug baade som stisegment (join(DIST, navn, post.slug)) og i en
+// href, og maa sjekke den mot dette foer den stoles paa. Uten sjekken kan en
+// slug som "../../evil" havne utenfor dist, og en manglende slug krasjer
+// path.join() for hele bygget.
+const GYLDIG_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+export function slugErGyldig(slug) {
+  return typeof slug === 'string' && GYLDIG_SLUG.test(slug);
+}

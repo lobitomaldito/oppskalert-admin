@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { parse } from 'node-html-parser';
 import { lagOppslag } from './mirror.mjs';
 import { bakeTekst, bakeBilder, bakeLister, settStilProp } from './bake.mjs';
-import { lesSamlinger, synlige } from './samling.mjs';
+import { lesSamlinger, synlige, slugErGyldig } from './samling.mjs';
 
 const EDITOR = fileURLToPath(new URL('../editor/', import.meta.url));
 
@@ -146,6 +146,19 @@ export function build(config = {}) {
   cpSync(EDITOR, join(DIST, 'admin'), { recursive: true });
 
   const samlinger = lesSamlinger(rot, (f) => readFileSync(f, 'utf8'), existsSync, (m) => readdirSync(m));
+
+  // post.slug havner rett i en filsti (join(DIST, navn, post.slug)) og i en
+  // href lenger ned. Et innlegg uten slug, eller med en slug som ikke matcher
+  // det trygge moensteret lagSlug produserer (f.eks. "../../evil"), hopper vi
+  // over her, foer noe annet bruker samlingen. Ett odelagt innlegg skal aldri
+  // stoppe resten av bygget, samme prinsipp som lastInnhold() og lesSamlinger().
+  for (const [navn, liste] of Object.entries(samlinger)) {
+    samlinger[navn] = liste.filter((post) => {
+      if (slugErGyldig(post.slug)) return true;
+      console.warn(`  ! "${navn}": et innlegg har en manglende eller ugyldig slug (${JSON.stringify(post.slug)}), hoppes over`);
+      return false;
+    });
+  }
 
   let sider = 0, treff = 0, innlegg = 0;
 
