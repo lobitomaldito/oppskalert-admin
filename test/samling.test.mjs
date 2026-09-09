@@ -1,7 +1,21 @@
 // test/samling.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lagSlug, lesSamlinger, synlige } from '../build/samling.mjs';
+import { lagSlug, lesSamlinger, synlige, unikSlug } from '../build/samling.mjs';
+
+// unikSlug er kollisjonsloekka lagSlug alltid har hatt, trukket ut som sin
+// egen eksporterte funksjon. lagSlug regenererer en slug fra en TITTEL og
+// deconflikterer den; api/save.js har allerede en FERDIG slug fra klienten
+// (ingen tittel aa transliterere paa nytt) og trenger bare deconfliktere den
+// direkte, saa den kaller unikSlug uten aa gaa via lagSlug.
+test('unikSlug lar en unik slug staa uendret', () => {
+  assert.equal(unikSlug('nyhet', ['noe-annet']), 'nyhet');
+});
+
+test('unikSlug gir -2 og -3 paa samme maate som lagSlug', () => {
+  assert.equal(unikSlug('nyhet', ['nyhet']), 'nyhet-2');
+  assert.equal(unikSlug('nyhet', ['nyhet', 'nyhet-2']), 'nyhet-3');
+});
 
 test('slug er smaa bokstaver med bindestrek', () => {
   assert.equal(lagSlug('Nytt bygg i sentrum'), 'nytt-bygg-i-sentrum');

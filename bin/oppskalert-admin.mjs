@@ -9,7 +9,7 @@ import { trygStI, trygSidenavn } from '../api/_stier.mjs';
 import { checkPin } from '../api/_rateLimit.mjs';
 import { kjor as kjorDoctor } from '../doctor/index.mjs';
 import { flett } from '../api/_samling.mjs';
-import { slugErGyldig } from '../build/samling.mjs';
+import { slugErGyldig, unikSlug } from '../build/samling.mjs';
 import { lesProsjekt } from './_les-prosjekt.mjs';
 import { lesToken } from './_skall.mjs';
 import { kobler } from './_kobler.mjs';
@@ -196,8 +196,11 @@ function dev() {
           if (typeof samling !== 'object' || Array.isArray(samling)) {
             return svar(400, { ok: false, error: 'Ugyldig samling.' });
           }
-          const samlingNavn = trygSidenavn(samling.navn);
-          if (!samlingNavn) return svar(400, { ok: false, error: 'Ugyldig navn på samlingen.' });
+          // Samme strenghet som api/save.js: navnet maa stemme noeyaktig med
+          // filnavnet build/doctor leser, saa slugErGyldig (avviser) brukes i
+          // stedet for trygSidenavn (stripper stille).
+          if (!slugErGyldig(samling.navn)) return svar(400, { ok: false, error: 'Ugyldig navn på samlingen.' });
+          const samlingNavn = samling.navn;
           const innlegg = samling.innlegg;
           if (!innlegg || typeof innlegg !== 'object' || Array.isArray(innlegg) || !slugErGyldig(innlegg.slug)) {
             return svar(400, { ok: false, error: 'Ugyldig slug på innlegget.' });
@@ -215,7 +218,12 @@ function dev() {
         if (samlingSti) {
           mkdirSync(join(rot, 'content/samlinger'), { recursive: true });
           const naaSamling = existsSync(samlingSti) ? JSON.parse(readFileSync(samlingSti, 'utf8')) : null;
-          writeFileSync(samlingSti, JSON.stringify(flett(naaSamling, samling.innlegg), null, 2));
+          if (naaSamling !== null && !Array.isArray(naaSamling)) {
+            return svar(500, { ok: false, error: 'Samlingsfila paa disk er ikke en liste. Rett den manuelt foerst.' });
+          }
+          const eksisterendeSlugs = Array.isArray(naaSamling) ? naaSamling.map((i) => i && i.slug).filter(Boolean) : [];
+          const nyttInnlegg = { ...samling.innlegg, slug: unikSlug(samling.innlegg.slug, eksisterendeSlugs) };
+          writeFileSync(samlingSti, JSON.stringify(flett(naaSamling, nyttInnlegg), null, 2));
         }
 
         build({ rot });

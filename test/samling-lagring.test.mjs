@@ -117,6 +117,21 @@ test('save avviser samling uten innlegg-objekt med 400, i stedet for aa krasje',
   assert.equal(res.kode, 400);
 });
 
+// trygSidenavn STRIPPER ulovlige tegn, den avviser dem ikke. Brukt paa
+// samling.navn ville et mellomrom eller en & blitt stille fjernet, og
+// publiseringen skrevet til en ANNEN fil enn den [data-samling] paa siden
+// faktisk peker paa. slugErGyldig avviser i stedet, saa et slikt navn gir 400
+// i stedet for et "vellykket" publisert innlegg som aldri dukker opp.
+test('save avviser et samlingsnavn med mellomrom med 400, i stedet for aa skrive til feil fil', async () => {
+  const res = lagRes();
+  await save(lagReq({
+    page: 'index', pin: 'hemmelig', edits: {},
+    samling: { navn: 'aktuelt nytt', innlegg: { slug: 'gyldig-slug' } }
+  }), res);
+  assert.equal(res.kode, 400);
+  assert.match(res.kropp.error, /navn/i);
+});
+
 // --- api/save.js: hele veien gjennom, med falsk GitHub ---
 
 test('samlingen havner i samme commit som edits og bilder', async () => {
@@ -153,6 +168,68 @@ test('samlingen havner i samme commit som edits og bilder', async () => {
     { slug: 'ny-post', tittel: 'Ny post' },
     { slug: 'gammel-post', tittel: 'Gammel post' }
   ]);
+});
+
+// Skjemaet lager slugen fra tittelen uten aa kjenne de andre innleggene i
+// samlingen (se editor/skjema.js). Kolliderer den likevel, skal flett() sin
+// "kjent slug"-gren ALDRI treffe: det ville byttet ut et helt annet innlegg
+// med det nye, stille. Kollisjonen skal i stedet gi et NYTT innlegg med en
+// deconfliktert slug (-2), akkurat som lagSlug() sitt eget kollisjonsmoenster.
+test('publisering med en slug som allerede finnes gir -2, i stedet for aa overskrive det gamle innlegget', async () => {
+  const gammelSamling = Buffer.from(JSON.stringify([{ slug: 'nyhet', tittel: 'Forste nyhet' }])).toString('base64');
+  const gh = falskGitHub({
+    'contents/content/aktuelt.json': 'IKKE_FUNNET',
+    'contents/content/samlinger/aktuelt.json': { content: gammelSamling },
+    'git/ref/heads/main': { object: { sha: 'HEAD1' } },
+    'git/commits/HEAD1': { tree: { sha: 'TRE0' } },
+    'git/trees': { sha: 'TRE1' },
+    'git/commits': { sha: 'COMMIT1' },
+    'git/refs/heads/main': {}
+  });
+  globalThis.fetch = gh.hent;
+
+  const res = lagRes();
+  await save(lagReq({
+    page: 'aktuelt', pin: 'hemmelig', edits: {},
+    samling: { navn: 'aktuelt', innlegg: { slug: 'nyhet', tittel: 'Andre nyhet, samme tittel' } }
+  }), res);
+
+  assert.equal(res.kode, 200);
+  const tre = gh.kall.find((k) => k.url.endsWith('git/trees')).kropp;
+  const samlingBlob = tre.tree.find((t) => t.path === 'content/samlinger/aktuelt.json');
+  const flettet = JSON.parse(samlingBlob.content);
+  assert.equal(flettet.length, 2, 'det gamle innlegget skal fortsatt vaere med, ikke overskrevet');
+  assert.equal(flettet[0].slug, 'nyhet-2');
+  assert.equal(flettet[0].tittel, 'Andre nyhet, samme tittel');
+  assert.deepEqual(flettet[1], { slug: 'nyhet', tittel: 'Forste nyhet' });
+});
+
+// lesFil() gir null naar fila ikke finnes enda, men kaster aldri paa gyldig
+// JSON som ikke er en liste (f.eks. en "{}" noen har lagt inn for haand paa
+// GitHub). Den formen skal avvises, ikke stille behandles som en tom samling:
+// det ville slettet alle eksisterende innlegg i neste commit.
+test('en samlingsfil som finnes men ikke er en tabell gir 500, i stedet for aa slette alt som stod der', async () => {
+  const oedelagtSamling = Buffer.from(JSON.stringify({})).toString('base64');
+  const gh = falskGitHub({
+    'contents/content/aktuelt.json': 'IKKE_FUNNET',
+    'contents/content/samlinger/aktuelt.json': { content: oedelagtSamling },
+    'git/ref/heads/main': { object: { sha: 'HEAD1' } },
+    'git/commits/HEAD1': { tree: { sha: 'TRE0' } },
+    'git/trees': { sha: 'TRE1' },
+    'git/commits': { sha: 'COMMIT1' },
+    'git/refs/heads/main': {}
+  });
+  globalThis.fetch = gh.hent;
+
+  const res = lagRes();
+  await save(lagReq({
+    page: 'aktuelt', pin: 'hemmelig', edits: {},
+    samling: { navn: 'aktuelt', innlegg: { slug: 'nytt-innlegg', tittel: 'Nytt' } }
+  }), res);
+
+  assert.equal(res.kode, 500);
+  const commitKall = gh.kall.filter((k) => k.url.endsWith('git/commits') && k.metode === 'POST');
+  assert.equal(commitKall.length, 0, 'ingen commit skal skje naar samlingsfila er oedelagt');
 });
 
 test('uten samling i requesten fungerer publisering akkurat som foer (regresjon)', async () => {

@@ -61,6 +61,34 @@ function felterIMal(tekst) {
   return treff;
 }
 
+// build/index.mjs hopper ubetinget over enhver mal som starter med _ (den
+// bygges aldri som egen side), og varsler i konsollen for alt annet enn
+// _innlegg.html. malFiler() i doctor/_hjelpere.mjs matcher den samme
+// ekskluderingen for dekningsreglene, men helt stille: en understrek-mal
+// mister ALL dekningskontroll uten at doctor sier et ord om det. Regelen her
+// gir bygget sitt eget varsel en tvilling i doctor, saa den som bare kjoerer
+// `doctor .` (uten aa lese byggeloggen) ogsaa faar vite det. Ubetinget av
+// samling, i motsetning til de to reglene over: ekskluderingen gjelder
+// ethvert prosjekt, ikke bare de med content/samlinger/.
+export const malUnderstrek = {
+  navn: 'mal-understrek',
+  alvor: 'varsel',
+  sjekk: (p) => {
+    const funn = [];
+    for (const f of p.filer) {
+      if (!f.sti.startsWith('templates/') || !f.sti.endsWith('.html')) continue;
+      const navn = f.sti.split('/').pop();
+      if (!navn.startsWith('_') || navn === '_innlegg.html') continue;
+      funn.push({
+        fil: f.sti,
+        linje: 0,
+        melding: `${navn} starter med _ og bygges derfor ikke som egen side, og faar heller ingen dekningskontroll. Var dette meningen? Fjern understreken hvis malen skal vaere en vanlig side.`
+      });
+    }
+    return funn;
+  }
+};
+
 export const samlingFelt = {
   navn: 'samling-felt',
   alvor: 'varsel',

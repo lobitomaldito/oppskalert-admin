@@ -73,6 +73,18 @@ test('data-innlegg og data-innlegg-image bakes inn paa innleggssiden', () => {
   assert.match(html, /src="\/assets\/uploads\/a\.jpg"/);
 });
 
+test('data-innlegg-image faar alt fra tittelen, samme som listekortets bilde', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', '_innlegg.html'),
+    '<html><body><img data-innlegg-image="bilde"></body></html>');
+  lagSamling(rot, 'aktuelt', [
+    { slug: 'a', tittel: 'Tittelen paa saken', bilde: '/assets/uploads/a.jpg', dato: '2026-01-01' },
+  ]);
+  build({ rot });
+  const html = readFileSync(join(rot, 'dist', 'aktuelt', 'a', 'index.html'), 'utf8');
+  assert.match(html, /alt="Tittelen paa saken"/);
+});
+
 test('et utkast gir ingen fil, og teksten finnes ikke noe sted i dist', () => {
   const rot = lagProsjekt();
   writeFileSync(join(rot, 'templates', '_innlegg.html'), '<html><body><h1 data-innlegg="tittel">X</h1></body></html>');
@@ -282,6 +294,18 @@ test('utkast er ikke med i samlingslista', () => {
   build({ rot });
   const html = readFileSync(join(rot, 'dist', 'index.html'), 'utf8');
   assert.doesNotMatch(html, /Kladd/);
+});
+
+test('en samling der ALT er utkast lar ogsaa malen staa uroert', () => {
+  const rot = lagProsjekt();
+  writeFileSync(join(rot, 'templates', 'index.html'), malMedSamling(
+    '<article data-list-item><h3 data-list-field="tittel">Standardtekst</h3></article>'));
+  lagSamling(rot, 'aktuelt', [{ slug: 'a', tittel: 'Kladd', dato: '2026-01-01', _kladd: '1' }]);
+  build({ rot });
+  const html = readFileSync(join(rot, 'dist', 'index.html'), 'utf8');
+  assert.match(html, /Standardtekst/);
+  const dom = parse(html);
+  assert.equal(dom.querySelectorAll('[data-list-item]').length, 1);
 });
 
 test('en tom samling lar malen staa uroert', () => {

@@ -4,7 +4,7 @@ import { checkPin } from './_rateLimit.mjs';
 import { commitFiler, lesFil } from './_git.mjs';
 import { trygStI, trygSidenavn, MAKS_PAYLOAD } from './_stier.mjs';
 import { flett } from './_samling.mjs';
-import { slugErGyldig } from '../build/samling.mjs';
+import { slugErGyldig, unikSlug } from '../build/samling.mjs';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Metoden er ikke tillatt' });
@@ -38,8 +38,14 @@ export default async function handler(req, res) {
     if (typeof samling !== 'object' || Array.isArray(samling)) {
       return res.status(400).json({ ok: false, error: 'Ugyldig samling.' });
     }
-    const samlingNavn = trygSidenavn(samling.navn);
-    if (!samlingNavn) return res.status(400).json({ ok: false, error: 'Ugyldig navn på samlingen.' });
+    // trygSidenavn STRIPPER ulovlige tegn i stedet for aa avvise dem, riktig
+    // for en sidenavn-parameter som uansett brukes til aa SKRIVE en fil. Her
+    // maa navnet derimot stemme NOEYAKTIG med filnavnet build/doctor allerede
+    // leser fra content/samlinger/. Strippet et mellomrom eller en & stille,
+    // skrev vi til en annen fil enn den malen viser, og klienten fikk
+    // "Publisert" mens innlegget aldri dukket opp noe sted.
+    if (!slugErGyldig(samling.navn)) return res.status(400).json({ ok: false, error: 'Ugyldig navn på samlingen.' });
+    const samlingNavn = samling.navn;
 
     const innlegg = samling.innlegg;
     if (!innlegg || typeof innlegg !== 'object' || Array.isArray(innlegg) || !slugErGyldig(innlegg.slug)) {
@@ -81,16 +87,38 @@ export default async function handler(req, res) {
   try {
     // Lesingen ligger INNE i try. Kaster den (403, 500, oedelagt fil), skal
     // publiseringen avbrytes, ikke fortsette med et tomt utgangspunkt som
-    // ville slettet alt klienten ikke rorte i denne runden.
-    const naa = (await lesFil({ repo, branch, token, sti: innholdSti })) || {};
+    // ville slettet alt klienten ikke rorte i denne runden. De to filene er
+    // uavhengige GitHub-kall, saa de leses parallelt: sekvensielt kostet hver
+    // samlings-publisering en dobbel tur-retur til GitHub.
+    const [naaRaw, naaSamling] = await Promise.all([
+      lesFil({ repo, branch, token, sti: innholdSti }),
+      samlingSti ? lesFil({ repo, branch, token, sti: samlingSti }) : Promise.resolve(null)
+    ]);
+    const naa = naaRaw || {};
     filer.push({ sti: innholdSti, innhold: JSON.stringify({ ...naa, ...edits }, null, 2) });
 
     if (samlingSti) {
-      // Samme grunn som for innholdet over: lesingen skal kunne kaste og
-      // avbryte hele publiseringen, ikke stille og bygge videre paa en tom
-      // tabell som ville slettet alle andre innlegg i samlingen.
-      const naaSamling = await lesFil({ repo, branch, token, sti: samlingSti });
-      filer.push({ sti: samlingSti, innhold: JSON.stringify(flett(naaSamling, samling.innlegg), null, 2) });
+      // lesFil() gir null naar fila ikke finnes enda (riktig: foerste innlegg
+      // i en ny samling), men kaster aldri paa gyldig-JSON-som-ikke-er-en-liste
+      // (f.eks. en "{}" noen har lagt inn for haand paa GitHub). Den formen
+      // maa avvises her, ikke stilltiende behandles som tom: flett() sin egen
+      // Array.isArray-sjekk er ment for "finnes ikke enda", ikke for "finnes,
+      // men er oedelagt", og de to skal ikke gi samme utfall.
+      if (naaSamling !== null && !Array.isArray(naaSamling)) {
+        return res.status(500).json({
+          ok: false,
+          error: 'Samlingsfila paa GitHub er ikke en liste. Publiseringen ble avbrutt for aa ikke slette de andre innleggene. Rett fila manuelt paa GitHub foerst.'
+        });
+      }
+      // Skjemaet lager slugen fra tittelen uten aa vite hvilke som er i bruk
+      // fra foer (se editor/skjema.js). Kolliderer den likevel med et
+      // eksisterende innlegg, skal IKKE flett() sin "kjent slug"-gren treffe:
+      // det ville byttet ut et helt annet innlegg med det nye, stille. unikSlug
+      // deconflikterer FOER flett() faar se slugen, saa en kollisjon alltid
+      // blir et NYTT innlegg (med -2, -3 ...), aldri en overskriving.
+      const eksisterendeSlugs = Array.isArray(naaSamling) ? naaSamling.map((i) => i && i.slug).filter(Boolean) : [];
+      const innlegg = { ...samling.innlegg, slug: unikSlug(samling.innlegg.slug, eksisterendeSlugs) };
+      filer.push({ sti: samlingSti, innhold: JSON.stringify(flett(naaSamling, innlegg), null, 2) });
     }
 
     const { sha } = await commitFiler({

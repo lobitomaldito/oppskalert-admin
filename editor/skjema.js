@@ -288,10 +288,11 @@
         }
         sender = false;
         overlegg.querySelector('[data-h="publiser"]').disabled = false;
-        // Et avvist bilde blir aldri godtatt senere heller. Toem koeen, ellers
-        // sender hver nye Publiser den samme posten, og eneste vei ut er aa
-        // kaste alt klienten har skrevet.
-        if (res.status === 400 && ventendeBilder.length) {
+        // Et avvist bilde blir aldri godtatt senere heller, verken paa 400
+        // (ulovlig format/sti) eller 413 (for stort sammen med resten av
+        // innlegget). Toem koeen paa begge, ellers sender hver nye Publiser
+        // den samme posten paa nytt og treffer den samme feilen i en loekke.
+        if ((res.status === 400 || res.status === 413) && ventendeBilder.length) {
           ventendeBilder = [];
           bildeSti = '';
           felt('forhaandsvisning').hidden = true;

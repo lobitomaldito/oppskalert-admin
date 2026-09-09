@@ -5,6 +5,20 @@ import { join } from 'node:path';
 
 const TRANSLITT = { æ: 'ae', ø: 'oe', å: 'aa' };
 
+// unikSlug legger -2, -3 og saa videre paa en slug som allerede er i bruk,
+// til den ikke kolliderer. Delt av lagSlug (etter transliterering av
+// tittelen under) og api/save.js (deconflikterer en slug klienten allerede
+// har generert, uten aa kjenne tittelen den kom fra).
+export function unikSlug(slug, brukte = []) {
+  let kandidat = slug;
+  let i = 2;
+  while (brukte.includes(kandidat)) {
+    kandidat = `${slug}-${i}`;
+    i++;
+  }
+  return kandidat;
+}
+
 // lagSlug lager en URL-vennlig streng av en tittel. Kolliderer den med en slug
 // som allerede er i bruk (brukte), faar den -2, -3 og saa videre.
 export function lagSlug(tittel, brukte = []) {
@@ -17,13 +31,7 @@ export function lagSlug(tittel, brukte = []) {
 
   if (!s) s = 'innlegg';
 
-  let kandidat = s;
-  let i = 2;
-  while (brukte.includes(kandidat)) {
-    kandidat = `${s}-${i}`;
-    i++;
-  }
-  return kandidat;
+  return unikSlug(s, brukte);
 }
 
 // lesSamlinger leser content/samlinger/*.json, en fil per samling, navngitt

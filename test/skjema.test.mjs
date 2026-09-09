@@ -176,6 +176,14 @@ test('escape-lytteren fjernes igjen naar overlegget lukkes', () => {
     'lukk() lar lytteren staa igjen, en per aapning');
 });
 
+test('en 413 toemmer bildekoeen paa samme maate som en 400', () => {
+  // Uten dette resendte en retry etter "for stort" den samme oversize-posten
+  // paa nytt, og traff den samme 413-en i en loekke: server.js sitt 413-svar
+  // ber klienten publisere teksten foerst og legge til bildet i en runde til,
+  // men det forutsetter at koeen faktisk toemmes.
+  assert.match(js, /res\.status === 400 \|\| res\.status === 413/);
+});
+
 test('Cmd/Ctrl+Z i edit.js lar INPUT og TEXTAREA beholde nettleserens tekst-angre', () => {
   const gren = editJs.slice(editJs.indexOf("e.key === 'z'"));
   const unntak = gren.slice(0, gren.indexOf('e.preventDefault()'));

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import samlingMal, { samlingFelt } from '../doctor/regler/samling.mjs';
+import samlingMal, { samlingFelt, malUnderstrek } from '../doctor/regler/samling.mjs';
 import { kjor, STANDARDREGLER } from '../doctor/index.mjs';
 import { lesProsjekt } from '../bin/_les-prosjekt.mjs';
 
@@ -88,6 +88,36 @@ test('samling-felt: odelagt json i en samling stopper ikke regelen', () => {
     { sti: 'templates/_innlegg.html', tekst: '<h1 data-innlegg="tittel">X</h1>' },
     { sti: 'content/samlinger/aktuelt.json', tekst: '{ ikke gyldig json' }
   ])));
+});
+
+// --- mal-understrek ---
+//
+// build/index.mjs hopper stille over _innlegg.html, men VARSLER i konsollen
+// for enhver annen understrek-mal (en navnekollisjon paa et eksisterende
+// prosjekt, mest sannsynlig). doctor/_hjelpere.mjs sin malFiler() ekskluderer
+// den samme fila fra dekningsreglene, men helt stille. Denne regelen gir
+// bygget sitt varsel en tvilling i doctor, saa den som bare kjoerer
+// `doctor .` ogsaa faar vite det. Ubetinget av samling: gjelder ethvert
+// prosjekt, ikke bare de med content/samlinger/.
+test('mal-understrek: en annen understrek-mal enn _innlegg.html er et varsel', () => {
+  assert.equal(malUnderstrek.alvor, 'varsel');
+  const funn = malUnderstrek.sjekk(p([
+    { sti: 'templates/_gammelpartial.html', tekst: '<h1>X</h1>' }
+  ]));
+  assert.equal(funn.length, 1);
+  assert.match(funn[0].melding, /_gammelpartial\.html/);
+});
+
+test('mal-understrek: _innlegg.html hoppes over, det er dens tiltenkte rolle', () => {
+  assert.deepEqual(malUnderstrek.sjekk(p([
+    { sti: 'templates/_innlegg.html', tekst: '<h1 data-innlegg="tittel">X</h1>' }
+  ])), []);
+});
+
+test('mal-understrek: en vanlig mal uten understrek gir ingen funn', () => {
+  assert.deepEqual(malUnderstrek.sjekk(p([
+    { sti: 'templates/index.html', tekst: '<h1>X</h1>' }
+  ])), []);
 });
 
 // --- hele doctor-regelsettet mot et korrekt bygget samling-prosjekt ---

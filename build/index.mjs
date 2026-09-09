@@ -39,8 +39,10 @@ function bakInnlegg(dom, post) {
     const felt = el.getAttribute('data-innlegg-image');
     const url = post[felt];
     if (url == null) continue;
-    if (el.tagName === 'IMG') el.setAttribute('src', url);
-    else settStilProp(el, 'background-image', `url('${url}')`);
+    if (el.tagName === 'IMG') {
+      el.setAttribute('src', url);
+      if (post.tittel) el.setAttribute('alt', post.tittel);
+    } else settStilProp(el, 'background-image', `url('${url}')`);
   }
 }
 
@@ -73,18 +75,23 @@ function bakSamlinger(dom, samlinger) {
     const liste = samlinger[navn];
     if (!Array.isArray(liste) || liste.length === 0) continue;
 
-    const maler = beholder.querySelectorAll('[data-list-item]');
-    if (maler.length === 0) continue;
-
-    const malStreng = maler[0].toString();
-    maler.forEach((el) => el.remove());
-
+    // synlige() filtreres FOER malen fjernes: en samling der alt som finnes
+    // er utkast har liste.length > 0, men ingenting aa vise. Uten dette sjekket
+    // fjernet koden malen og satte ingenting tilbake, saa hele seksjonen ble
+    // tom paa den ferdige siden i stedet for aa la plassholderen staa urort.
     let poster = synlige(liste).slice().sort((a, b) => {
       const da = String(a.dato || '');
       const db = String(b.dato || '');
       if (da === db) return 0;
       return da > db ? -1 : 1;
     });
+    if (poster.length === 0) continue;
+
+    const maler = beholder.querySelectorAll('[data-list-item]');
+    if (maler.length === 0) continue;
+
+    const malStreng = maler[0].toString();
+    maler.forEach((el) => el.remove());
 
     // Number('tre') er NaN, og slice(0, NaN) gir en tom liste: en skrivefeil i
     // ett attributt slettet foer hele seksjonen fra den ferdige siden, stille.
