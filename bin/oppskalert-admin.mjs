@@ -44,6 +44,18 @@ function init() {
     writeFileSync(full, innhold);
     console.log(`  skrev ${rel}`);
   }
+  // api-skallene er ESM. Uten "type": "module" laster Vercel dem som CommonJS
+  // og hvert kall krasjer med ERR_REQUIRE_ESM. `npm init -y` skriver
+  // "commonjs" paa nyere npm, saa typen settes uansett hva som staar der.
+  const pakkeFil = join(rot, 'package.json');
+  if (existsSync(pakkeFil)) {
+    const pakke = JSON.parse(readFileSync(pakkeFil, 'utf8'));
+    if (pakke.type !== 'module') {
+      pakke.type = 'module';
+      writeFileSync(pakkeFil, JSON.stringify(pakke, null, 2) + '\n');
+      console.log('  satte "type": "module" i package.json');
+    }
+  }
   const tokensFil = join(rot, 'static/css/tokens.css');
   mkdirSync(join(rot, 'static/css'), { recursive: true });
   let tokensEndret = false;

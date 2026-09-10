@@ -13,11 +13,12 @@ import dekningTekst, { dekningListe, dekningRammeTekst } from './regler/dekning-
 import dekningBilde, { dekningRammeBilde } from './regler/dekning-bilde.mjs';
 import gjentattGruppe from './regler/gjentatt-gruppe.mjs';
 import samlingMal, { samlingFelt, malUnderstrek } from './regler/samling.mjs';
+import apiModultype from './regler/api-modultype.mjs';
 
 export const STANDARDREGLER = [
   margin, strongB, tokens, fonts, byggetid, strek, ikkeXmenY, sidenokkel,
   dekningTekst, dekningListe, dekningRammeTekst, dekningBilde, dekningRammeBilde, gjentattGruppe,
-  samlingMal, samlingFelt, malUnderstrek
+  samlingMal, samlingFelt, malUnderstrek, apiModultype
 ];
 
 export function kjor(prosjekt, regler = STANDARDREGLER) {

@@ -10,6 +10,7 @@ import byggetid from '../doctor/regler/malt-byggetid.mjs';
 import strek from '../doctor/regler/tankestrek.mjs';
 import ikkeXmenY from '../doctor/regler/ikke-x-men-y.mjs';
 import sidenokkel from '../doctor/regler/sidenokkel.mjs';
+import apiModultype from '../doctor/regler/api-modultype.mjs';
 
 const p = (filer) => ({ rot: '/x', filer });
 
@@ -137,6 +138,54 @@ test('en side-noekkel som ikke matcher malfilnavnet er en feil, siden publiserin
   assert.equal(funn.length, 1);
   assert.match(funn[0].melding, /content\/om-oss\.json/);
   assert.match(funn[0].melding, /content\/om\.json/);
+});
+
+const SKALL = "export { default } from 'oppskalert-admin/api/save.js';\n";
+
+test('api-skall med ESM og uten type i package.json er en feil, siden Vercel da krasjer med ERR_REQUIRE_ESM', () => {
+  const funn = apiModultype.sjekk(p([
+    { sti: 'package.json', tekst: '{"name":"x"}' },
+    { sti: 'api/save.js', tekst: SKALL }
+  ]));
+  assert.equal(apiModultype.alvor, 'feil');
+  assert.equal(funn.length, 1);
+  assert.equal(funn[0].linje, 1);
+  assert.match(funn[0].melding, /ingen "type"/);
+  assert.match(funn[0].melding, /npm pkg set type=module/);
+});
+
+test('"type": "commonjs", som npm init -y skriver, er ogsaa en feil', () => {
+  const funn = apiModultype.sjekk(p([
+    { sti: 'package.json', tekst: '{"type":"commonjs"}' },
+    { sti: 'api/verify-pin.js', tekst: '// skall\n' + SKALL }
+  ]));
+  assert.equal(funn.length, 1);
+  assert.equal(funn[0].linje, 2);
+  assert.match(funn[0].melding, /"type": "commonjs"/);
+});
+
+test('api-skall med "type": "module" gaar rent gjennom', () => {
+  assert.deepEqual(apiModultype.sjekk(p([
+    { sti: 'package.json', tekst: '{"type":"module"}' },
+    { sti: 'api/save.js', tekst: SKALL },
+    { sti: 'static/js/meny.js', tekst: 'export const x = 1;' }
+  ])), []);
+});
+
+test('et CommonJS-endepunkt i api/ med "type": "module" er en feil', () => {
+  const funn = apiModultype.sjekk(p([
+    { sti: 'package.json', tekst: '{"type":"module"}' },
+    { sti: 'api/kontakt.js', tekst: '// bruker require() for aa sende\nmodule.exports = (req, res) => res.end();' }
+  ]));
+  assert.equal(funn.length, 1);
+  assert.equal(funn[0].linje, 2);
+});
+
+test('CommonJS-endepunkt uten type i package.json gaar rent gjennom', () => {
+  assert.deepEqual(apiModultype.sjekk(p([
+    { sti: 'package.json', tekst: '{}' },
+    { sti: 'api/kontakt.js', tekst: 'const x = require("x");\nmodule.exports = x;' }
+  ])), []);
 });
 
 test('kjor skiller feil fra varsler', () => {

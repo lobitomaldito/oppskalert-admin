@@ -26,7 +26,7 @@ ett bygg, også når tekst og bilder endres i samme runde.
 Krever Node 18 eller nyere.
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.3.0"
+npm i "github:lobitomaldito/oppskalert-admin#v1.3.1"
 npx oppskalert-admin init .
 ```
 
@@ -42,6 +42,16 @@ npx oppskalert-admin init .
 `api/`-filene må ligge som ekte filer i prosjektet fordi Vercel ruter på filsti.
 Ett re-eksport-uttrykk holder, Node File Trace følger importen inn i
 `node_modules`.
+
+`init` setter også `"type": "module"` i `package.json`. Re-eksportene er ESM,
+og uten typen laster Vercel dem som CommonJS: hvert kall til `/api/save` og
+`/api/verify-pin` svarer `FUNCTION_INVOCATION_FAILED`, og loggen viser
+`ERR_REQUIRE_ESM`. `npm init -y` skriver `"type": "commonjs"` på nyere npm, så
+dette rammer nesten alle nye prosjekter. `dev` og bygget merker ingenting, feilen
+viser seg først etter deploy. Retter du `package.json` for hånd:
+`npm pkg set type=module`. Har siden egne endepunkter i `api/` skrevet med
+`require` eller `module.exports`, må de skrives om til `import`/`export`.
+`doctor` flagger begge tilfellene (regelen `api-modultype`).
 
 Fjern `node-html-parser` fra prosjektets egne `dependencies` hvis den ligger der.
 Pakken tar den med seg.
@@ -97,10 +107,16 @@ Et prosjekt får en rettelse først når avhengigheten peker på den nye taggen.
 Bytt taggen og installer på nytt, kjør så `doctor` og bygget:
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.3.0"
+npm i "github:lobitomaldito/oppskalert-admin#v1.3.1"
 npx oppskalert-admin doctor .
 node build.mjs
 ```
+
+**v1.3.1:** `doctor` feiler når `api/*.js` bruker `import`/`export` og
+`package.json` mangler `"type": "module"`, og `init` setter typen. Et prosjekt
+som allerede kjører på Vercel har typen fra før, ellers hadde publiseringen aldri
+virket. Gir `doctor` denne feilen etter oppgraderingen, kjør
+`npm pkg set type=module` før neste deploy.
 
 **v1.3.0: alle prosjekter bør oppgradere.** To feil i admin-baren er rettet:
 
@@ -249,8 +265,9 @@ oppskalert-admin kobler [sti]    # setter miljøvariablene i Vercel, se egen sek
 
 `doctor` håndhever disse som feil: inline `margin` på et listeelement, CSS som
 styler `strong` uten å style `b`, manglende `--adm-*`-farger, lenker til Google
-Fonts, og manglende redigeringsmarkør på tekst og bilder (se Dekningskontrollen
-under). Disse varsles: umålt byggetid, tankestrek, mulige «ikke X, men
+Fonts, `api/*.js` med et modulsystem som ikke stemmer med `"type"` i
+`package.json`, og manglende redigeringsmarkør på tekst og bilder (se
+Dekningskontrollen under). Disse varsles: umålt byggetid, tankestrek, mulige «ikke X, men
 Y»-setninger, manglende redigeringsmarkør i `li`, `h4` og topp-/bunntekst, og tre
 eller flere like søsken-elementer på rad. Varsler er kandidater til
 gjennomlesing og stopper ingenting.

@@ -82,6 +82,17 @@ test('dev bruker samme stivalidering som produksjon', async () => {
   assert.equal(trygStI('static/assets/uploads/ok.jpg'), 'static/assets/uploads/ok.jpg');
 });
 
+test('init setter "type": "module" i package.json, og doctor godtar skallene etterpaa', () => {
+  const rot = prosjekt('<h1 data-edit="t">ok</h1>');
+  writeFileSync(join(rot, 'package.json'), '{\n  "name": "x",\n  "type": "commonjs"\n}\n');
+  execFileSync('node', [CLI, 'init', rot], { encoding: 'utf8' });
+  const pakke = JSON.parse(readFileSync(join(rot, 'package.json'), 'utf8'));
+  assert.equal(pakke.type, 'module');
+  assert.equal(pakke.name, 'x');
+  const ut = execFileSync('node', [CLI, 'doctor', rot], { encoding: 'utf8' });
+  assert.doesNotMatch(ut, /api-modultype/);
+});
+
 test('init overskriver ikke en eksisterende fil', () => {
   const rot = prosjekt('<h1>ok</h1>');
   mkdirSync(join(rot, 'api'));
