@@ -66,6 +66,16 @@ test('init skriver api-skallene og build.mjs', () => {
   assert.match(readFileSync(join(rot, 'build.mjs'), 'utf8'), /oppskalert-admin\/build/);
 });
 
+// html:root (0,1,1) slaar :root (0,1,0) i edit.css uansett lasterekkefolge,
+// ogsaa i et prosjekt som fortsatt staar paa en eldre versjon av pakken.
+test('init skriver tokens.css med en selektor som slaar edit.css sin :root', () => {
+  const rot = prosjekt('<h1>ok</h1>');
+  const tokens = join(rot, 'static', 'css', 'tokens.css');
+  writeFileSync(tokens, '/* tom */\n');
+  execFileSync('node', [CLI, 'init', rot], { encoding: 'utf8' });
+  assert.match(readFileSync(tokens, 'utf8'), /html:root\s*\{[^}]*--adm-aksent/);
+});
+
 test('dev bruker samme stivalidering som produksjon', async () => {
   const { trygStI } = await import('../api/_stier.mjs');
   assert.equal(trygStI('static/assets/uploads/../../api/save.js'), null);

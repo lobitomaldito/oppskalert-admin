@@ -26,7 +26,7 @@ ett bygg, også når tekst og bilder endres i samme runde.
 Krever Node 18 eller nyere.
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.0.0"
+npm i "github:lobitomaldito/oppskalert-admin#v1.3.0"
 npx oppskalert-admin init .
 ```
 
@@ -90,6 +90,33 @@ også. Andre filer i `api/` er sidens egne og skal stå.
 Fortsett med installeringen over: `npm i`, så `npx oppskalert-admin init .`.
 Kjør `oppskalert-admin doctor .` og `node build.mjs` etterpå for å bekrefte at
 siden bygger med det nye panelet.
+
+### Oppgradere
+
+Et prosjekt får en rettelse først når avhengigheten peker på den nye taggen.
+Bytt taggen og installer på nytt, kjør så `doctor` og bygget:
+
+```bash
+npm i "github:lobitomaldito/oppskalert-admin#v1.3.0"
+npx oppskalert-admin doctor .
+node build.mjs
+```
+
+**v1.3.0: alle prosjekter bør oppgradere.** To feil i admin-baren er rettet:
+
+- Sidens `--adm-*`-farger ble overstyrt. `edit.js` legger `edit.css` sist i
+  `<head>`, og fallbackene der sto på `:root` med samme spesifisitet som sidens
+  egne, så hver side fikk den blå standardbaren. Fallbackene står nå på
+  `:where(:root)` med spesifisitet 0, og `:root` i sidens `tokens.css` vinner.
+  `init` skriver `html:root`, som vinner også mot eldre versjoner. Et prosjekt
+  som har omgått feilen med `html:root` kan beholde det.
+- Baren har fått mobiloppsett. Under 600 px ligger den i full bredde med to
+  rader: knappene øverst, statusteksten under, kuttet med ellipse. Under 360 px
+  viker Admin-merket for knappene. En lang feilmelding vises derfor bare
+  delvis på mobil.
+
+Taggen tar også med samlinger (se egen seksjon), som står av til prosjektet
+oppretter `content/samlinger/`.
 
 ## Miljøvariabler
 

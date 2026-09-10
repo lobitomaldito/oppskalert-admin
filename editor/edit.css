@@ -1,8 +1,11 @@
 /* Admin-UI. Fargene er sidens egne: en side som setter --adm-* i sin :root
    faar en admin-bar som hoerer hjemme i designet. Fallbackene under er
    noeytrale med vilje, saa en side som glemmer aa sette dem faar en brukbar
-   bar i stedet for en usynlig. */
-:root {
+   bar i stedet for en usynlig.
+   :where(:root) og ikke :root: edit.js legger denne fila sist i <head>, etter
+   sidens tokens.css. Med lik spesifisitet ville fallbackene vunnet. :where()
+   gir dem spesifisitet 0, saa sidens :root vinner uansett rekkefolge. */
+:where(:root) {
   --adm-aksent: #3d6be0;
   --adm-flate:  #1c1b1a;
   --adm-tekst:  #f5f4f2;
@@ -31,6 +34,34 @@
 .adm__btn--primary:disabled { opacity: 0.5; cursor: default; }
 .adm__btn--ghost { background: transparent; opacity: 0.7; font-weight: 500; }
 .adm__status { font-size: 13px; opacity: 0.85; min-width: 10px; }
+
+/* Smal skjerm. Maalt paa 390x844 uten denne blokken: baren ble 172 px hoy,
+   gikk utenfor skjermkanten og statusteksten brakk i en smal kolonne. Her
+   ligger knappene paa en rad som krymper i stedet for aa bryte, og
+   statusteksten paa sin egen rad under, kuttet med ellipse. Baren blir
+   dermed aldri hoyere enn to rader, heller ikke paa 320 px. */
+@media (max-width: 600px) {
+  .adm {
+    left: 8px; right: 8px; bottom: 8px; transform: none;
+    gap: 6px; padding: 6px 6px 6px 12px; border-radius: 16px;
+  }
+  .adm:has(.adm__status:not(:empty)) { padding-bottom: 28px; }
+  .adm > * { min-width: 0; }
+  .adm__tag, .adm__btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .adm__tag { flex-shrink: 10; font-size: 13px; }
+  .adm__btn { padding: 7px 11px; font-size: 12px; }
+  .adm__btn--ghost { margin-left: auto; }
+  .adm__status {
+    position: absolute; left: 14px; right: 14px; bottom: 8px; font-size: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+}
+/* Paa 320 px ble alle fire knappetekstene kuttet. Knappene sier nok til at
+   Admin-merket kan vike. */
+@media (max-width: 360px) {
+  .adm__tag { display: none; }
+  .adm__btn { padding: 7px 9px; }
+}
 
 /* Editable fields get a subtle dashed outline in edit mode */
 .adm-editable {

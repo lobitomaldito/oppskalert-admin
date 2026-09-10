@@ -25,8 +25,9 @@ const SKALL = {
 };
 
 const TOKENS = `
-/* Admin-baren arver sidens farger. Bytt verdiene til sidens egne. */
-:root {
+/* Admin-baren arver sidens farger. Bytt verdiene til sidens egne.
+   html:root slaar fallbackene i edit.css uansett lasterekkefolge og versjon. */
+html:root {
   --adm-aksent: #3d6be0;
   --adm-flate:  #1c1b1a;
   --adm-tekst:  #f5f4f2;
