@@ -19,6 +19,7 @@ function lagIo(overstyr = {}) {
     rot: '/tmp/x',
     malByggetid: async () => 48000,
     skrivAdminTid: (ms) => io.tidSkrevet.push(ms),
+    hent: async () => ({ ok: true, status: 200, json: async () => ({}) }),
     ...overstyr
   };
   return io;
@@ -119,6 +120,87 @@ test('feiler pushen som trigger deployen: sier eksplisitt at verdien gjelder foe
     io.skrevet.some((l) => /gjelder foerst fra neste deploy/i.test(l)),
     'sier ikke eksplisitt at verdien foerst gjelder etter neste deploy'
   );
+});
+
+test('feil tokenformat lar brukeren proeve igjen i stedet for aa avbryte', async () => {
+  const forsokt = [];
+  const forsok = ['ikke-et-token', 'github_pat_GYLDIG'];
+  const io = lagIo({
+    lesToken: async () => { const t = forsok.shift(); forsokt.push(t); return t; }
+  });
+  const res = await kobler(io);
+  assert.deepEqual(forsokt, ['ikke-et-token', 'github_pat_GYLDIG']);
+  assert.ok(io.skrevet.some((l) => /ser ikke ut som et GitHub-token/i.test(l)));
+  assert.ok(res.satt.includes('GITHUB_TOKEN'));
+});
+
+test('GitHub avviser tokenet (401): brukeren faar proeve igjen, ingenting settes for den runden', async () => {
+  const forsok = ['github_pat_FEIL', 'github_pat_RIKTIG'];
+  const kjorteEnv = [];
+  const io = lagIo({
+    lesToken: async () => forsok.shift(),
+    hent: async (url, opt) => {
+      const token = opt.headers.Authorization.replace('Bearer ', '');
+      if (token === 'github_pat_FEIL') return { ok: false, status: 401, json: async () => ({}) };
+      return { ok: true, status: 200, json: async () => ({}) };
+    },
+    kjor(cmd, args, opt) {
+      io.kjort.push({ cmd, args, opt });
+      if (cmd === 'git') return 'https://github.com/eier/kundeside.git\n';
+      if (cmd === 'vercel' && args.includes('GITHUB_TOKEN')) kjorteEnv.push(opt.input);
+      return '';
+    }
+  });
+  const res = await kobler(io);
+  assert.ok(io.skrevet.some((l) => /401/.test(l) && /Bad credentials/i.test(l)));
+  assert.deepEqual(kjorteEnv, ['github_pat_RIKTIG'], 'det avviste tokenet skal aldri naa vercel env add');
+  assert.ok(res.satt.includes('GITHUB_TOKEN'));
+});
+
+test('GitHub sier tokenet mangler tilgang til repoet (404): tydelig norsk feil, ny sjanse', async () => {
+  const forsok = ['github_pat_UTEN_TILGANG', 'github_pat_OK'];
+  const io = lagIo({
+    lesToken: async () => forsok.shift(),
+    hent: async (url, opt) => {
+      const token = opt.headers.Authorization.replace('Bearer ', '');
+      if (token === 'github_pat_UTEN_TILGANG') return { ok: false, status: 404, json: async () => ({}) };
+      return { ok: true, status: 200, json: async () => ({}) };
+    }
+  });
+  const res = await kobler(io);
+  assert.ok(io.skrevet.some((l) => /404/.test(l) && /tilgang/i.test(l)));
+  assert.ok(res.satt.includes('GITHUB_TOKEN'));
+});
+
+test('token uten skriverettighet (permissions.push false) avvises foer settEnv', async () => {
+  const forsok = ['github_pat_LESKUN', 'github_pat_SKRIVBAR'];
+  const kjorteEnv = [];
+  const io = lagIo({
+    lesToken: async () => forsok.shift(),
+    hent: async (url, opt) => {
+      const token = opt.headers.Authorization.replace('Bearer ', '');
+      if (token === 'github_pat_LESKUN') {
+        return { ok: true, status: 200, json: async () => ({ permissions: { push: false } }) };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    },
+    kjor(cmd, args, opt) {
+      io.kjort.push({ cmd, args, opt });
+      if (cmd === 'git') return 'https://github.com/eier/kundeside.git\n';
+      if (cmd === 'vercel' && args.includes('GITHUB_TOKEN')) kjorteEnv.push(opt.input);
+      return '';
+    }
+  });
+  await kobler(io);
+  assert.ok(io.skrevet.some((l) => /skriverettighet/i.test(l)));
+  assert.deepEqual(kjorteEnv, ['github_pat_SKRIVBAR']);
+});
+
+test('godkjent token: de siste fire tegnene vises, resten aldri', async () => {
+  const io = lagIo({ lesToken: async () => 'github_pat_ABCDwxyz' });
+  await kobler(io);
+  assert.ok(io.skrevet.some((l) => l.includes('...wxyz')));
+  assert.equal(io.skrevet.some((l) => l.includes('github_pat_ABCDwxyz')), false);
 });
 
 test('en feilende env add stopper flyten og sier hvilken', async () => {

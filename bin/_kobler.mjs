@@ -4,13 +4,13 @@
 // nettleser, stdin og klokke kommer inn via io (bygget i bin/_skall.mjs
 // for den ekte kommandoen). Det gjoer at hele koblingsloepet kan testes
 // uten aa endre et eneste ekte Vercel-prosjekt.
-import { lagPin, lesRepo, settEnv } from './_skall.mjs';
+import { lagPin, lesRepo, settEnv, tokenHarGyldigFormat, sjekkToken } from './_skall.mjs';
 
 const GITHUB_TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new';
 
-// io = { kjor, spor, skriv, aapne, naa, lesToken, rot, malByggetid, skrivAdminTid }
+// io = { kjor, spor, skriv, aapne, naa, lesToken, rot, malByggetid, skrivAdminTid, hent }
 export async function kobler(io) {
-  const { kjor, spor, skriv, aapne, lesToken, malByggetid, skrivAdminTid } = io;
+  const { kjor, spor, skriv, aapne, lesToken, malByggetid, skrivAdminTid, hent } = io;
 
   const repo = lesRepo(kjor);
   if (!repo) {
@@ -48,13 +48,36 @@ export async function kobler(io) {
   aapne(GITHUB_TOKEN_URL);
 
   skriv('Lim inn det ferdige tokenet her (det vises ikke mens du skriver):');
-  const rått = await lesToken();
-  const token = String(rått ?? '').trim();
-  if (!token) {
-    throw new Error(
-      'Fikk et tomt token. Ingenting er satt i Vercel enda, saa det er trygt aa proeve igjen.'
-    );
+  let token;
+  for (;;) {
+    const rått = await lesToken();
+    const kandidat = String(rått ?? '').trim();
+    if (!kandidat) {
+      throw new Error(
+        'Fikk et tomt token. Ingenting er satt i Vercel enda, saa det er trygt aa proeve igjen.'
+      );
+    }
+
+    if (!tokenHarGyldigFormat(kandidat)) {
+      skriv(
+        'Det ser ikke ut som et GitHub-token (skal starte med ghp_ eller github_pat_, ' +
+        'og bare inneholde bokstaver, tall og understrek). Proev aa lime inn paa nytt:'
+      );
+      continue;
+    }
+
+    skriv('Sjekker tokenet mot GitHub...');
+    const resultat = await sjekkToken(hent, repo, kandidat);
+    if (!resultat.ok) {
+      skriv(`${resultat.feil} Ingenting er satt. Proev aa lime inn paa nytt:`);
+      continue;
+    }
+
+    token = kandidat;
+    break;
   }
+
+  skriv(`Token OK, sjekket mot GitHub. Slutter paa ...${token.slice(-4)}.`);
 
   const satt = [];
   const settOgHusk = (navn, verdi, sensitiv) => {

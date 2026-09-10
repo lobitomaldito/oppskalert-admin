@@ -29,10 +29,32 @@ export function lesRepo(kjor) {
   return `${m[1]}/${m[2]}`;
 }
 
+// ANSI CSI-sekvenser: ESC [ parametre sluttbokstav. Dekker bade
+// bracketed-paste-markoerene ESC[200~/ESC[201~ og andre sekvenser som kan
+// folge med en innliming (piltaster, fargekoder). Terminalen kan sende
+// disse selv om dette programmet aldri ba om dem: bracketed paste er en
+// modus paa selve terminalen (DECSET 2004), og skallet (f.eks. zsh sin zle)
+// slaar den ofte paa som standard, uavhengig av hva node gjoer. Uten denne
+// vaskingen blir markoerene en del av det limte "tokenet" og overlever
+// .trim(), fordi ESC ikke regnes som whitespace.
+const ANSI_CSI = /\x1b\[[0-9;]*[A-Za-z~]/g;
+
+// Fjerner ANSI-sekvenser og C0-kontrolltegn fra en verdi lest fra
+// terminalen. Brukt som siste vask i lesToken, i tillegg til vaskingen som
+// skjer tegn for tegn i lesLinjeSkjult, saa ogsaa ikke-TTY-veien (pipe/fil)
+// er dekket.
+const C0_KONTROLLTEGN = /[\x00-\x1f\x7f]/g;
+
+export function saneringToken(tekst) {
+  return String(tekst ?? '')
+    .replace(ANSI_CSI, '')
+    .replace(C0_KONTROLLTEGN, '');
+}
+
 // Leser en linje fra ekte stdin uten aa ekko tegnene, saa tokenet ikke blir
 // staaende synlig i terminalen.
 //
-// To kanter:
+// Kanter:
 // - Ctrl+C midtveis: rydder opp raw mode og forkaster med en tydelig feil,
 //   i stedet for aa la terminalen henge i en rar tilstand.
 // - stdin er ikke en TTY (kommandoen kjoert i et skript, eller stdin er en
@@ -40,6 +62,11 @@ export function lesRepo(kjor) {
 //   kaster. En pipe har uansett ingen skjerm aa ekko til, saa vi leser
 //   linja raatt med readline (terminal: false slaar av ekko naar det ikke
 //   er en terminal likevel).
+// - Bracketed-paste-markoerer (og andre ANSI-sekvenser) i en innlimt verdi:
+//   vaskes bort per chunk foer tegn-loekka pakker dem inn i tokenet. Skjer
+//   en sekvens midt over to chunker, fanger format- og GitHub-sjekken i
+//   _kobler.mjs det som en gang, i stedet for at et korrupt token blir
+//   lagret.
 //
 // `strommer` er injiserbar (default: den ekte process), saa denne
 // sikkerhetskritiske funksjonen kan testes med en falsk stdin i stedet for
@@ -82,7 +109,11 @@ export function lesLinjeSkjult(strommer = process) {
     // ett enkelt tegn (det matcher aldri, og lot prompten henge for evig
     // paa en limt verdi).
     function paaData(del) {
-      for (const tegn of String(del)) {
+      // Vask bort hele ANSI-sekvenser (bracketed-paste-markoerene inkludert)
+      // foer tegn-loekka. \r, \n, backspace og Ctrl+C skal fortsatt virke,
+      // saa de vaskes ikke bort her: de haandteres eksplisitt under.
+      const renset = String(del).replace(ANSI_CSI, '');
+      for (const tegn of renset) {
         if (tegn === '\u0003') {
           rydd();
           stdout.write('\n');
@@ -99,6 +130,11 @@ export function lesLinjeSkjult(strommer = process) {
           bokstaver = bokstaver.slice(0, -1);
           continue;
         }
+        // Et loest kontrolltegn (f.eks. en ESC som ikke var del av en hel
+        // ANSI-sekvens i denne chunken, fordi terminalen delte den over to
+        // chunker) skal ikke havne i tokenet. Skjer det, fanger format- og
+        // GitHub-sjekken i _kobler.mjs resten.
+        if (tegn.codePointAt(0) < 0x20) continue;
         bokstaver += tegn;
       }
     }
@@ -108,10 +144,73 @@ export function lesLinjeSkjult(strommer = process) {
 }
 
 // lesLinjeSkjult er injiserbar for testbarhet, defaulter til den ekte
-// stdin-leseren over.
+// stdin-leseren over. saneringToken() er en siste vask her, i tillegg til
+// den i lesLinjeSkjult, saa ogsaa ikke-TTY-veien (pipe/fil) er dekket.
 export async function lesToken(lesLinje = lesLinjeSkjult) {
   const linje = await lesLinje();
-  return String(linje ?? '').trim();
+  return saneringToken(linje).trim();
+}
+
+// Godtar bare de to kjente GitHub-token-formatene: klassisk (ghp_) og
+// fine-grained (github_pat_), etterfulgt av bare bokstaver, tall og
+// understrek. Fanger opp limefeil (feil verdi, halve tokenet, whitespace
+// som overlevde vaskingen) foer noe i det hele tatt sendes til GitHub.
+const TOKEN_FORMAT = /^(ghp_|github_pat_)[A-Za-z0-9_]+$/;
+
+export function tokenHarGyldigFormat(token) {
+  return TOKEN_FORMAT.test(String(token ?? ''));
+}
+
+// Sjekker at tokenet faktisk virker mot GitHub og har tilgang til repoet,
+// foer det lagres i Vercel. `hent` er injisert fetch (samme som resten av
+// io-objektet), saa dette kan testes uten aa roere det ekte GitHub-API-et.
+//
+// GitHub svarer 404, ikke 403, naar et token ikke har tilgang til et repo
+// (for aa ikke lekke at private repoer finnes), saa den mappingen er
+// bevisst. `permissions.push` er tilgjengelig paa svaret for klassiske
+// tokens naar de har tilstrekkelig tilgang; fine-grained tokens har den
+// ofte ikke paa dette endepunktet.
+//
+// ponytail: kan ikke skrive-sjekke et fine-grained token uten en muterende
+// GitHub-kall. Stoler paa 200 + fravaer av permissions.push:false. Upgrade
+// path om det blir et problem: en dry-run mot et endepunkt som krever
+// contents:write.
+export async function sjekkToken(hent, repo, token) {
+  let svar;
+  try {
+    svar = await hent(`https://api.github.com/repos/${repo}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'oppskalert-admin-kobler'
+      }
+    });
+  } catch (e) {
+    return { ok: false, feil: `Naadde ikke GitHub for aa sjekke tokenet: ${e.message}.` };
+  }
+
+  if (svar.status === 401) {
+    return { ok: false, feil: 'GitHub avviste tokenet (401 Bad credentials). Feil verdi limt inn.' };
+  }
+  if (svar.status === 404) {
+    return {
+      ok: false,
+      feil: `Tokenet har ikke tilgang til ${repo} (404). Sjekk at "Repository access" i tokenet omfatter dette repoet.`
+    };
+  }
+  if (!svar.ok) {
+    return { ok: false, feil: `GitHub svarte med status ${svar.status} da tokenet ble sjekket.` };
+  }
+
+  const data = await svar.json();
+  if (data && data.permissions && data.permissions.push === false) {
+    return {
+      ok: false,
+      feil: `Tokenet mangler skriverettighet paa ${repo}. Lag et nytt token med "Contents: Read and write".`
+    };
+  }
+
+  return { ok: true };
 }
 
 // vercel env add leser verdien fra stdin naar --value mangler. --value

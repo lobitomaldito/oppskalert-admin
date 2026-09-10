@@ -172,3 +172,27 @@ test('lesToken gir tom streng, ikke krasj, naar Enter trykkes med en gang', asyn
   stdin.emit('data', '\r');
   assert.equal(await p, '');
 });
+
+// Granskerens hypotese for 401-hendelsen 11.09.2026: terminalen hadde
+// bracketed paste-modus paa (fra skallet, ikke fra dette programmet), og
+// markoerene rundt en limt verdi havnet i tokenet fordi ESC ikke er
+// whitespace og overlevde .trim(). Disse to testene emitterer den ekte
+// byte-sekvensen en terminal sender rundt en innliming.
+test('bracketed-paste-markoerer rundt en innlimt verdi havner aldri i tokenet', async () => {
+  const stdin = lagFalskTtyStdin();
+  const stdout = lagFalskStdout();
+  const p = lesLinjeSkjult({ stdin, stdout });
+  // En ekte terminal sender ESC[200~<limt tekst>ESC[201~ som en (eller
+  // flere) 'data'-hendelser naar bracketed paste er paa.
+  stdin.emit('data', '\x1b[200~github_pat_HEMMELIG\x1b[201~');
+  stdin.emit('data', '\r');
+  assert.equal(await p, 'github_pat_HEMMELIG');
+});
+
+test('lesToken over en bracketed paste gir et rent token som bestaar formatsjekken', async () => {
+  const stdin = lagFalskTtyStdin();
+  const stdout = lagFalskStdout();
+  const p = lesToken(() => lesLinjeSkjult({ stdin, stdout }));
+  stdin.emit('data', '\x1b[200~github_pat_HEMMELIG\x1b[201~\r');
+  assert.equal(await p, 'github_pat_HEMMELIG');
+});
