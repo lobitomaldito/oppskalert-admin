@@ -11,6 +11,10 @@ import strek from '../doctor/regler/tankestrek.mjs';
 import ikkeXmenY from '../doctor/regler/ikke-x-men-y.mjs';
 import sidenokkel from '../doctor/regler/sidenokkel.mjs';
 import apiModultype from '../doctor/regler/api-modultype.mjs';
+import dodeLenker from '../doctor/regler/dode-lenker.mjs';
+import sidehode from '../doctor/regler/sidehode.mjs';
+import sidestruktur from '../doctor/regler/sidestruktur.mjs';
+import hardkodetArstall from '../doctor/regler/hardkodet-arstall.mjs';
 
 const p = (filer) => ({ rot: '/x', filer });
 
@@ -185,6 +189,98 @@ test('CommonJS-endepunkt uten type i package.json gaar rent gjennom', () => {
   assert.deepEqual(apiModultype.sjekk(p([
     { sti: 'package.json', tekst: '{}' },
     { sti: 'api/kontakt.js', tekst: 'const x = require("x");\nmodule.exports = x;' }
+  ])), []);
+});
+
+test('href="#" er en dod lenke', () => {
+  const funn = dodeLenker.sjekk(p([{ sti: 'templates/a.html', tekst: '<a href="#">Les mer</a>' }]));
+  assert.equal(dodeLenker.alvor, 'feil');
+  assert.equal(funn.length, 1);
+  assert.match(funn[0].melding, /Lenke uten mål/);
+});
+
+test('tom href er en dod lenke', () => {
+  const funn = dodeLenker.sjekk(p([{ sti: 'templates/a.html', tekst: '<a href="">Les mer</a>' }]));
+  assert.equal(funn.length, 1);
+});
+
+test('intern lenke til en id som ikke finnes er en dod lenke', () => {
+  const funn = dodeLenker.sjekk(p([{ sti: 'templates/a.html', tekst: '<a href="#priser">Priser</a><section id="tjenester"></section>' }]));
+  assert.equal(funn.length, 1);
+  assert.match(funn[0].melding, /#priser/);
+});
+
+test('intern lenke til en id som finnes gaar rent gjennom', () => {
+  assert.deepEqual(dodeLenker.sjekk(p([
+    { sti: 'templates/a.html', tekst: '<a href="#priser">Priser</a><section id="priser"></section>' }
+  ])), []);
+});
+
+test('ekstern lenke og lenke til en annen mal gaar rent gjennom', () => {
+  assert.deepEqual(dodeLenker.sjekk(p([
+    { sti: 'templates/a.html', tekst: '<a href="https://example.com">Ekstern</a><a href="om-oss.html">Om oss</a>' }
+  ])), []);
+});
+
+test('mangler tittel, beskrivelse og favicon er tre funn', () => {
+  const funn = sidehode.sjekk(p([{ sti: 'templates/index.html', tekst: '<html><head></head><body>x</body></html>' }]));
+  assert.equal(sidehode.alvor, 'feil');
+  assert.equal(funn.length, 3);
+});
+
+test('tittel, beskrivelse og favicon til stede gaar rent gjennom', () => {
+  const head = '<title>Firma AS</title><meta name="description" content="Vi gjor jobben."><link rel="icon" href="/favicon.png">';
+  assert.deepEqual(sidehode.sjekk(p([{ sti: 'templates/index.html', tekst: `<html><head>${head}</head><body>x</body></html>` }])), []);
+});
+
+test('404-siden sjekkes ogsaa, selv om malFiler hopper over den', () => {
+  const funn = sidehode.sjekk(p([{ sti: 'templates/404.html', tekst: '<html><head></head><body>x</body></html>' }]));
+  assert.equal(funn.length, 3);
+});
+
+test('manglende 404.html er en feil', () => {
+  const funn = sidestruktur.sjekk(p([{ sti: 'templates/index.html', tekst: '<header></header>' }]));
+  assert.equal(sidestruktur.alvor, 'feil');
+  assert.match(funn.map((f) => f.melding).join(' '), /404/);
+});
+
+test('header uten hjemlenke er en feil', () => {
+  const funn = sidestruktur.sjekk(p([
+    { sti: 'templates/404.html', tekst: 'x' },
+    { sti: 'templates/index.html', tekst: '<header><a href="/priser">Priser</a></header>' }
+  ]));
+  assert.equal(funn.length, 1);
+  assert.match(funn[0].melding, /forsiden/);
+});
+
+test('header med lenke til / er greit', () => {
+  assert.deepEqual(sidestruktur.sjekk(p([
+    { sti: 'templates/404.html', tekst: 'x' },
+    { sti: 'templates/index.html', tekst: '<header><a href="/">Logo</a></header>' }
+  ])), []);
+});
+
+test('ingen header/nav i det hele tatt gir ingen funn fra hjemlenke-sjekken', () => {
+  assert.deepEqual(sidestruktur.sjekk(p([
+    { sti: 'templates/404.html', tekst: 'x' },
+    { sti: 'templates/index.html', tekst: '<main>x</main>' }
+  ])), []);
+});
+
+test('hardkodet aarstall ved © er et varsel', () => {
+  const funn = hardkodetArstall.sjekk(p([{ sti: 'templates/index.html', tekst: '<footer>© 2024 Firma AS</footer>' }]));
+  assert.equal(hardkodetArstall.alvor, 'varsel');
+  assert.equal(funn.length, 1);
+});
+
+test('&copy; med aarstall telles ogsaa', () => {
+  const funn = hardkodetArstall.sjekk(p([{ sti: 'templates/index.html', tekst: '<footer>&copy; 2026 Firma AS</footer>' }]));
+  assert.equal(funn.length, 1);
+});
+
+test('aarstall satt av JS gaar rent gjennom', () => {
+  assert.deepEqual(hardkodetArstall.sjekk(p([
+    { sti: 'templates/index.html', tekst: '<footer>© <span id="ar"></span> Firma AS</footer><script>document.getElementById("ar").textContent = new Date().getFullYear();</script>' }
   ])), []);
 });
 

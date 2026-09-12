@@ -107,10 +107,18 @@ Et prosjekt får en rettelse først når avhengigheten peker på den nye taggen.
 Bytt taggen og installer på nytt, kjør så `doctor` og bygget:
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.3.1"
+npm i "github:lobitomaldito/oppskalert-admin#v1.4.0"
 npx oppskalert-admin doctor .
 node build.mjs
 ```
+
+**v1.4.0:** `doctor` fanger fire nye ting, hentet fra en sjekkliste over vanlige
+vibekoding-feil: lenker uten mål (`href="#"`, tom `href`, et internt anker uten
+matchende `id`), manglende `<title>`/meta description/favicon på en side,
+manglende `templates/404.html` og en header/nav uten lenke hjem (alle fire som
+feil), og et hardkodet årstall ved siden av `©` (varsel). Et prosjekt som
+allerede manglet noe av dette feiler på `doctor` etter oppgraderingen; rett
+opp det som meldes, det var reelle mangler før også.
 
 **v1.3.1:** `doctor` feiler når `api/*.js` bruker `import`/`export` og
 `package.json` mangler `"type": "module"`, og `init` setter typen. Et prosjekt
@@ -266,11 +274,14 @@ oppskalert-admin kobler [sti]    # setter miljøvariablene i Vercel, se egen sek
 `doctor` håndhever disse som feil: inline `margin` på et listeelement, CSS som
 styler `strong` uten å style `b`, manglende `--adm-*`-farger, lenker til Google
 Fonts, `api/*.js` med et modulsystem som ikke stemmer med `"type"` i
-`package.json`, og manglende redigeringsmarkør på tekst og bilder (se
-Dekningskontrollen under). Disse varsles: umålt byggetid, tankestrek, mulige «ikke X, men
-Y»-setninger, manglende redigeringsmarkør i `li`, `h4` og topp-/bunntekst, og tre
-eller flere like søsken-elementer på rad. Varsler er kandidater til
-gjennomlesing og stopper ingenting.
+`package.json`, manglende redigeringsmarkør på tekst og bilder (se
+Dekningskontrollen under), lenker uten mål (`href="#"`, tom `href`, eller et
+internt anker uten matchende `id`), manglende `<title>`/meta description/
+favicon på en side, manglende `templates/404.html`, og en header/nav uten
+lenke hjem. Disse varsles: umålt byggetid, tankestrek, mulige «ikke X, men
+Y»-setninger, manglende redigeringsmarkør i `li`, `h4` og topp-/bunntekst, tre
+eller flere like søsken-elementer på rad, og et hardkodet årstall ved siden av
+`©`. Varsler er kandidater til gjennomlesing og stopper ingenting.
 
 `dev` serverer `dist/`, tar imot publisering lokalt og bygger om med én gang. Det
 er samme løkke som i produksjon, uten ventetiden på Vercel.

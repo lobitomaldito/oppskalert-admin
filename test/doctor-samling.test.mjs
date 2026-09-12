@@ -144,11 +144,29 @@ function byggSamlingsprosjekt() {
 
   // Forsiden: minimalt, men dekket, saa den ikke selv gir feil paa
   // dekning-tekst/dekning-bilde. Lenker tokens.css, se admin-tokens.mjs.
+  // Tittel, meta description, favicon og en hjemlenke i header er ogsaa med,
+  // saa fixturen fortsatt er "korrekt" etter sidehode.mjs og sidestruktur.mjs.
   writeFileSync(join(rot, 'templates', 'index.html'), `<!doctype html>
-<html><head><link rel="stylesheet" href="/css/tokens.css"></head>
+<html><head>
+<title>Aktuelt</title>
+<meta name="description" content="Siste nytt.">
+<link rel="icon" href="/favicon.png">
+<link rel="stylesheet" href="/css/tokens.css">
+</head>
 <body>
+<header><a href="/">Logo</a></header>
 <h1 data-edit="forside-tittel">Aktuelt</h1>
 </body></html>`);
+
+  // sidestruktur.mjs krever templates/404.html, og sidehode.mjs sjekker
+  // tittel/beskrivelse/favicon ogsaa paa 404-siden.
+  writeFileSync(join(rot, 'templates', '404.html'), `<!doctype html>
+<html><head>
+<title>Fant ikke siden</title>
+<meta name="description" content="Siden finnes ikke.">
+<link rel="icon" href="/favicon.png">
+</head>
+<body><a href="/">Til forsiden</a></body></html>`);
 
   // Innleggsmalen: data-innlegg/data-innlegg-image, IKKE data-edit. Dette er
   // nettopp instrumenteringen README-seksjonen fra denne tasken dokumenterer.

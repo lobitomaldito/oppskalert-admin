@@ -14,11 +14,16 @@ import dekningBilde, { dekningRammeBilde } from './regler/dekning-bilde.mjs';
 import gjentattGruppe from './regler/gjentatt-gruppe.mjs';
 import samlingMal, { samlingFelt, malUnderstrek } from './regler/samling.mjs';
 import apiModultype from './regler/api-modultype.mjs';
+import dodeLenker from './regler/dode-lenker.mjs';
+import sidehode from './regler/sidehode.mjs';
+import sidestruktur from './regler/sidestruktur.mjs';
+import hardkodetArstall from './regler/hardkodet-arstall.mjs';
 
 export const STANDARDREGLER = [
   margin, strongB, tokens, fonts, byggetid, strek, ikkeXmenY, sidenokkel,
   dekningTekst, dekningListe, dekningRammeTekst, dekningBilde, dekningRammeBilde, gjentattGruppe,
-  samlingMal, samlingFelt, malUnderstrek, apiModultype
+  samlingMal, samlingFelt, malUnderstrek, apiModultype,
+  dodeLenker, sidehode, sidestruktur, hardkodetArstall
 ];
 
 export function kjor(prosjekt, regler = STANDARDREGLER) {

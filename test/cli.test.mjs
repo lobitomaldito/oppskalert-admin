@@ -20,8 +20,12 @@ function prosjekt(htmlInnhold) {
   mkdirSync(join(rot, 'node_modules', 'x'), { recursive: true });
   // tokens.css maa lenkes fra en mal. Uten lenken flagger admin-tokens-regelen
   // denne fixturen sin egen tokens.css som ulenket. Se doctor/regler/admin-tokens.mjs.
+  // Tittel/beskrivelse/favicon og templates/404.html er ogsaa med, saa
+  // sidehode.mjs og sidestruktur.mjs (se doctor/regler/) godtar fixturen.
+  const HODE = '<title>Test</title>\n<meta name="description" content="Test.">\n<link rel="icon" href="/favicon.png">';
   writeFileSync(join(rot, 'templates', 'index.html'),
-    `<link rel="stylesheet" href="/css/tokens.css">\n${htmlInnhold}`);
+    `${HODE}\n<link rel="stylesheet" href="/css/tokens.css">\n${htmlInnhold}`);
+  writeFileSync(join(rot, 'templates', '404.html'), HODE);
   writeFileSync(join(rot, 'static', 'css', 'tokens.css'),
     ':root{--adm-aksent:#1;--adm-flate:#2;--adm-tekst:#3;--adm-fare:#4;--adm-ok:#5}');
   writeFileSync(join(rot, 'node_modules', 'x', 'stor.html'), '<li data-list-item style="margin:1rem">');
