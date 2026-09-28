@@ -7,6 +7,7 @@ import { parse } from 'node-html-parser';
 import { lagOppslag } from './mirror.mjs';
 import { bakeTekst, bakeBilder, bakeLister, settStilProp } from './bake.mjs';
 import { lesSamlinger, synlige, slugErGyldig } from './samling.mjs';
+import { bakInnleggside, lagSkjema, renTekst } from './innleggside.mjs';
 
 const EDITOR = fileURLToPath(new URL('../editor/', import.meta.url));
 
@@ -27,23 +28,15 @@ const EDITOR = fileURLToPath(new URL('../editor/', import.meta.url));
 const PUBLIKUMSSTIL = '<style>.is-hidden-item{display:none}.txt-lg{font-size:1.25em}.txt-sm{font-size:0.85em}' +
   '[data-list-detail]{display:none}body.adm-editing [data-list-detail]{display:block}</style>';
 
-// Skriver ett innleggs felt inn i innleggsmalen. Samme to attributt-navn
-// som resten av motoren (data-edit/data-edit-image), bare med -innlegg for aa
-// gjoere det tydelig at kilden er en samling og ikke sidas egen JSON.
-function bakInnlegg(dom, post) {
-  for (const el of dom.querySelectorAll('[data-innlegg]')) {
-    const felt = el.getAttribute('data-innlegg');
-    if (post[felt] != null) el.set_content(post[felt]);
-  }
-  for (const el of dom.querySelectorAll('[data-innlegg-image]')) {
-    const felt = el.getAttribute('data-innlegg-image');
-    const url = post[felt];
-    if (url == null) continue;
-    if (el.tagName === 'IMG') {
-      el.setAttribute('src', url);
-      if (post.tittel) el.setAttribute('alt', post.tittel);
-    } else settStilProp(el, 'background-image', `url('${url}')`);
-  }
+// Synlige innlegg, nyeste dato foerst. Samme rekkefoelge i lista paa
+// foreldresiden og blant de relaterte paa innleggssiden.
+function sorterte(liste) {
+  return synlige(liste).slice().sort((a, b) => {
+    const da = String(a.dato || '');
+    const db = String(b.dato || '');
+    if (da === db) return 0;
+    return da > db ? -1 : 1;
+  });
 }
 
 // Fyller listeseksjonen [data-samling="navn"] paa foreldresiden med de synlige
@@ -79,12 +72,14 @@ function bakSamlinger(dom, samlinger) {
     // er utkast har liste.length > 0, men ingenting aa vise. Uten dette sjekket
     // fjernet koden malen og satte ingenting tilbake, saa hele seksjonen ble
     // tom paa den ferdige siden i stedet for aa la plassholderen staa urort.
-    let poster = synlige(liste).slice().sort((a, b) => {
-      const da = String(a.dato || '');
-      const db = String(b.dato || '');
-      if (da === db) return 0;
-      return da > db ? -1 : 1;
-    });
+    let poster = sorterte(liste);
+    // data-samling-sist="status=solgt": innlegg der feltet inneholder verdien,
+    // legges bakerst, foer data-samling-antall kutter lista.
+    const [sistFelt, sistVerdi] = String(beholder.getAttribute('data-samling-sist') || '').split('=');
+    if (sistFelt && sistVerdi) {
+      const treff = (p) => renTekst(p[sistFelt]).toLowerCase().includes(sistVerdi.toLowerCase());
+      poster = [...poster.filter((p) => !treff(p)), ...poster.filter(treff)];
+    }
     if (poster.length === 0) continue;
 
     const maler = beholder.querySelectorAll('[data-list-item]');
@@ -235,6 +230,7 @@ export function build(config = {}) {
 
   let sider = 0, treff = 0, innlegg = 0;
   const innleggStier = [];
+  const etiketter = {};
 
   for (const fil of readdirSync(TPL)) {
     if (!fil.endsWith('.html')) continue;
@@ -244,7 +240,8 @@ export function build(config = {}) {
     // eksisterende prosjekt kan ha en understrek-mal av en helt annen grunn og
     // miste siden sin stille, saa alt annet enn _innlegg.html sier fra.
     if (fil.startsWith('_')) {
-      if (fil !== '_innlegg.html') {
+      const navn = fil.slice(1, -'.html'.length);
+      if (fil !== '_innlegg.html' && !(navn in samlinger)) {
         console.warn(`  ! ${fil} hoppes over (starter med _, bygges ikke som egen side). Var dette meningen?`);
       }
       continue;
@@ -256,6 +253,14 @@ export function build(config = {}) {
     treff += bakeTekst(dom, slaOpp);
     treff += bakeBilder(dom, slaOpp);
     treff += bakeLister(dom, slaOpp);
+    // Knappeteksten og overskriften redigeringssiden bruker, satt paa lista.
+    for (const b of dom.querySelectorAll('[data-samling]')) {
+      const navn = b.getAttribute('data-samling');
+      etiketter[navn] = etiketter[navn] || {};
+      for (const [attr, k] of [['data-samling-ny', 'ny'], ['data-samling-tittel', 'tittel']]) {
+        if (b.getAttribute(attr) && !etiketter[navn][k]) etiketter[navn][k] = b.getAttribute(attr);
+      }
+    }
     treff += bakSamlinger(dom, samlinger);
 
     const head = dom.querySelector('head');
@@ -271,27 +276,37 @@ export function build(config = {}) {
   // helt, er samlinger {} og loekka under gjoer ingenting. Mangler bare malen
   // (en samling finnes, men ingen _innlegg.html), skal bygget IKKE kaste: det
   // er doctor sin jobb aa si fra om det.
-  const malInnleggSti = join(TPL, '_innlegg.html');
-  if (existsSync(malInnleggSti)) {
-    const malRaw = readFileSync(malInnleggSti, 'utf8');
-    for (const [navn, liste] of Object.entries(samlinger)) {
-      for (const post of synlige(liste)) {
-        const dom = parse(malRaw, { comment: true });
-        bakInnlegg(dom, post);
+  // En side per innlegg, fra templates/_<samling>.html eller, uten den,
+  // templates/_innlegg.html. Mangler begge, skal bygget IKKE kaste: det er
+  // doctor sin jobb aa si fra. Skjemaet redigeringssiden trenger, lages av
+  // samme mal og skrives til dist/admin/samlinger.json.
+  const skjema = {};
+  for (const [navn, liste] of Object.entries(samlinger)) {
+    const malSti = [join(TPL, `_${navn}.html`), join(TPL, '_innlegg.html')].find((f) => existsSync(f));
+    if (!malSti) continue;
+    const malRaw = readFileSync(malSti, 'utf8');
+    skjema[navn] = { tittel: navn, ny: 'Legg ut nytt innlegg', ...etiketter[navn], felt: lagSkjema(malRaw) };
 
-        const head = dom.querySelector('head');
-        if (head) head.insertAdjacentHTML('beforeend', PUBLIKUMSSTIL);
+    const poster = sorterte(liste);
+    poster.forEach((post, i) => {
+      const dom = parse(malRaw, { comment: true });
+      bakInnleggside(dom, poster, i, navn);
 
-        let html = dom.toString();
-        if (!/^\s*<!doctype/i.test(html)) html = `<!DOCTYPE html>\n${html}`;
+      const head = dom.querySelector('head');
+      if (head) head.insertAdjacentHTML('beforeend', PUBLIKUMSSTIL);
 
-        const utMappe = join(DIST, navn, post.slug);
-        mkdirSync(utMappe, { recursive: true });
-        writeFileSync(join(utMappe, 'index.html'), html);
-        innlegg++;
-        innleggStier.push(`/${navn}/${post.slug}/`);
-      }
-    }
+      let html = dom.toString();
+      if (!/^\s*<!doctype/i.test(html)) html = `<!DOCTYPE html>\n${html}`;
+
+      const utMappe = join(DIST, navn, post.slug);
+      mkdirSync(utMappe, { recursive: true });
+      writeFileSync(join(utMappe, 'index.html'), html);
+      innlegg++;
+      innleggStier.push(`/${navn}/${post.slug}/`);
+    });
+  }
+  if (Object.keys(skjema).length) {
+    writeFileSync(join(DIST, 'admin', 'samlinger.json'), JSON.stringify(skjema, null, 2));
   }
 
   // Etter alle innleggssidene er skrevet, saa sitemap-en teller faktisk

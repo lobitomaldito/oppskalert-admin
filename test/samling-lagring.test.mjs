@@ -252,3 +252,90 @@ test('uten samling i requesten fungerer publisering akkurat som foer (regresjon)
   assert.equal(tre.tree.length, 1);
   assert.equal(tre.tree[0].path, 'content/aktuelt.json');
 });
+
+// --- behandle(): redigeringssidens fire handlinger ---
+
+import { behandle } from '../api/_samling.mjs';
+
+const TO = [{ slug: 'a', tittel: 'A', pris: '100' }, { slug: 'b', tittel: 'B' }];
+
+test('behandle ny: legges foerst, og en slug i bruk faar -2', () => {
+  const r = behandle(TO, { innlegg: { slug: 'a', tittel: 'Ny A' } });
+  assert.equal(r.slug, 'a-2');
+  assert.deepEqual(r.liste.map((i) => i.slug), ['a-2', 'a', 'b']);
+});
+
+test('behandle oppdater: bytter ut innlegget paa plassen sin og roerer ikke de andre', () => {
+  const r = behandle(TO, { handling: 'oppdater', innlegg: { slug: 'b', tittel: 'B endret' } });
+  assert.deepEqual(r.liste, [{ slug: 'a', tittel: 'A', pris: '100' }, { slug: 'b', tittel: 'B endret' }]);
+});
+
+test('behandle oppdater av en slug som ikke finnes gir 404, aldri et nytt innlegg', () => {
+  assert.equal(behandle(TO, { handling: 'oppdater', innlegg: { slug: 'x', tittel: 'X' } }).feil.status, 404);
+});
+
+test('behandle slett fjerner bare det ene innlegget', () => {
+  const r = behandle(TO, { handling: 'slett', slug: 'a' });
+  assert.deepEqual(r.liste, [{ slug: 'b', tittel: 'B' }]);
+  assert.equal(behandle(TO, { handling: 'slett', slug: 'x' }).feil.status, 404);
+  assert.equal(behandle(TO, { handling: 'slett', slug: '../x' }).feil.status, 400);
+});
+
+test('behandle les skriver ingenting, og en ukjent handling avvises', () => {
+  assert.deepEqual(behandle(TO, { handling: 'les' }), { liste: TO, skriv: false });
+  assert.equal(behandle(TO, { handling: 'tull', innlegg: { slug: 'a' } }).feil.status, 400);
+});
+
+const FALSK_COMMIT = {
+  'git/ref/heads/main': { object: { sha: 'HEAD1' } },
+  'git/commits/HEAD1': { tree: { sha: 'TRE0' } },
+  'git/trees': { sha: 'TRE1' },
+  'git/commits': { sha: 'COMMIT1' },
+  'git/refs/heads/main': {}
+};
+const lagret = (liste) => ({ content: Buffer.from(JSON.stringify(liste)).toString('base64') });
+
+test('save les gir innleggene uten aa committe, og uten page og edits', async () => {
+  const gh = falskGitHub({ 'contents/content/samlinger/varer.json': lagret(TO), ...FALSK_COMMIT });
+  globalThis.fetch = gh.hent;
+  const res = lagRes();
+  await save(lagReq({ pin: 'hemmelig', samling: { navn: 'varer', handling: 'les' } }), res);
+  assert.equal(res.kode, 200);
+  assert.deepEqual(res.kropp.innlegg, TO);
+  assert.equal(gh.kall.some((k) => k.metode === 'POST'), false);
+});
+
+test('save slett committer samlingen uten innlegget, og ingen sidefil', async () => {
+  const gh = falskGitHub({ 'contents/content/samlinger/varer.json': lagret(TO), ...FALSK_COMMIT });
+  globalThis.fetch = gh.hent;
+  const res = lagRes();
+  await save(lagReq({ pin: 'hemmelig', samling: { navn: 'varer', handling: 'slett', slug: 'a' } }), res);
+  assert.equal(res.kode, 200);
+  const tre = gh.kall.find((k) => k.url.endsWith('git/trees')).kropp;
+  assert.deepEqual(tre.tree.map((t) => t.path), ['content/samlinger/varer.json']);
+  assert.deepEqual(JSON.parse(tre.tree[0].content), [{ slug: 'b', tittel: 'B' }]);
+});
+
+test('save oppdater med bilder gir ett commit, og svaret har slugen', async () => {
+  const gh = falskGitHub({ 'contents/content/samlinger/varer.json': lagret(TO), ...FALSK_COMMIT });
+  globalThis.fetch = gh.hent;
+  const res = lagRes();
+  await save(lagReq({
+    pin: 'hemmelig',
+    bilder: [{ sti: 'static/assets/uploads/1-a.jpg', data: 'data:image/jpeg;base64,AAAA' }],
+    samling: { navn: 'varer', handling: 'oppdater', innlegg: { slug: 'a', tittel: 'A', bilde: '/assets/uploads/1-a.jpg' } }
+  }), res);
+  assert.equal(res.kode, 200);
+  assert.equal(res.kropp.slug, 'a');
+  const stier = gh.kall.find((k) => k.url.endsWith('git/trees')).kropp.tree.map((t) => t.path).sort();
+  assert.deepEqual(stier, ['content/samlinger/varer.json', 'static/assets/uploads/1-a.jpg']);
+});
+
+test('save avviser ukjent handling foer GitHub', async () => {
+  const gh = falskGitHub({});
+  globalThis.fetch = gh.hent;
+  const res = lagRes();
+  await save(lagReq({ pin: 'hemmelig', samling: { navn: 'varer', handling: 'tull' } }), res);
+  assert.equal(res.kode, 400);
+  assert.equal(gh.kall.length, 0);
+});

@@ -28,19 +28,24 @@ function alleInnlegg(p) {
   return innlegg;
 }
 
+// Navnet paa samlingen, fra content/samlinger/<navn>.json.
+const samlingNavn = (f) => f.sti.split('/').pop().replace(/\.json$/, '');
+
+// Malen bygget bruker: templates/_<navn>.html, ellers templates/_innlegg.html.
+function malFor(p, navn) {
+  return p.filer.find((f) => f.sti === `templates/_${navn}.html`) || p.filer.find((f) => f.sti === INNLEGG_MAL);
+}
+
 export default {
   navn: 'samling-mal',
   alvor: 'feil',
-  sjekk: (p) => {
-    const samlinger = samlingFiler(p);
-    if (samlinger.length === 0) return [];
-    if (p.filer.some((f) => f.sti === INNLEGG_MAL)) return [];
-    return [{
-      fil: samlinger[0].sti,
+  sjekk: (p) => samlingFiler(p)
+    .filter((f) => !malFor(p, samlingNavn(f)))
+    .map((f) => ({
+      fil: f.sti,
       linje: 0,
-      melding: `Prosjektet har en samling (${samlinger[0].sti}) men mangler ${INNLEGG_MAL}. Uten den malen bygges det aldri en side per innlegg.`
-    }];
-  }
+      melding: `Samlingen ${f.sti} mangler mal: legg til templates/_${samlingNavn(f)}.html eller ${INNLEGG_MAL}. Uten den bygges det aldri en side per innlegg.`
+    }))
 };
 
 // Fanger data-innlegg="felt" og data-innlegg-image="felt" i raatekst, med
@@ -49,7 +54,7 @@ export default {
 // regex holder, en full HTML-parse for to attributt-navn er unoedvendig
 // vekt. (?:-image)? er valgfri, saa begge attributt-navnene fanges av samme
 // moenster.
-const FELT_ATTRIBUTT = /data-innlegg(?:-image)?="([^"]+)"/g;
+const FELT_ATTRIBUTT = /data-innlegg(?:-image|-galleri)?="([^"]+)"/g;
 
 function felterIMal(tekst) {
   const treff = [];
@@ -79,6 +84,7 @@ export const malUnderstrek = {
       if (!f.sti.startsWith('templates/') || !f.sti.endsWith('.html')) continue;
       const navn = f.sti.split('/').pop();
       if (!navn.startsWith('_') || navn === '_innlegg.html') continue;
+      if (samlingFiler(p).some((s) => `_${samlingNavn(s)}.html` === navn)) continue;
       funn.push({
         fil: f.sti,
         linje: 0,
@@ -93,23 +99,28 @@ export const samlingFelt = {
   navn: 'samling-felt',
   alvor: 'varsel',
   sjekk: (p) => {
-    const mal = p.filer.find((f) => f.sti === INNLEGG_MAL);
-    if (!mal) return [];
-
-    const innlegg = alleInnlegg(p);
-    if (innlegg.length === 0) return [];
-
-    const nokler = new Set();
-    for (const post of innlegg) for (const k of Object.keys(post)) nokler.add(k);
+    // Per mal: feltene i den, mot noeklene i samlingene som bruker den.
+    const perMal = new Map();
+    for (const f of samlingFiler(p)) {
+      const mal = malFor(p, samlingNavn(f));
+      if (!mal) continue;
+      if (!perMal.has(mal)) perMal.set(mal, []);
+      perMal.get(mal).push(...alleInnlegg({ filer: [f] }));
+    }
 
     const funn = [];
-    for (const { felt, linje } of felterIMal(mal.tekst)) {
-      if (nokler.has(felt)) continue;
-      funn.push({
-        fil: mal.sti,
-        linje,
-        melding: `data-innlegg="${felt}" viser et felt ingen innlegg i samlingen har. Sjekk stavemaaten, eller fjern markoren hvis feltet ikke lenger brukes.`
-      });
+    for (const [mal, innlegg] of perMal) {
+      if (innlegg.length === 0) continue;
+      const nokler = new Set();
+      for (const post of innlegg) for (const k of Object.keys(post)) nokler.add(k);
+      for (const { felt, linje } of felterIMal(mal.tekst)) {
+        if (nokler.has(felt)) continue;
+        funn.push({
+          fil: mal.sti,
+          linje,
+          melding: `data-innlegg="${felt}" viser et felt ingen innlegg i samlingen har. Sjekk stavemaaten, eller fjern markoren hvis feltet ikke lenger brukes.`
+        });
+      }
     }
     return funn;
   }

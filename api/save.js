@@ -3,8 +3,8 @@
 import { checkPin } from './_rateLimit.mjs';
 import { commitFiler, lesFil } from './_git.mjs';
 import { trygStI, trygSidenavn, MAKS_PAYLOAD } from './_stier.mjs';
-import { flett } from './_samling.mjs';
-import { slugErGyldig, unikSlug } from '../build/samling.mjs';
+import { behandle } from './_samling.mjs';
+import { slugErGyldig } from '../build/samling.mjs';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Metoden er ikke tillatt' });
@@ -14,7 +14,10 @@ export default async function handler(req, res) {
   const sjekk = checkPin(req, pin, process.env.ADMIN_PIN);
   if (!sjekk.ok) return res.status(sjekk.status).json({ ok: false, error: sjekk.error });
 
-  if (!page || !edits) return res.status(400).json({ ok: false, error: 'Mangler page eller edits' });
+  // En samlingsforespoersel fra redigeringssiden (editor/samling.js) har
+  // ingen side og ingen edits. Alt annet maa ha begge, som foer.
+  const harSamling = samling !== undefined && samling !== null;
+  if (!harSamling && (!page || !edits)) return res.status(400).json({ ok: false, error: 'Mangler page eller edits' });
 
   const repo = process.env.GITHUB_REPO;
   const token = process.env.GITHUB_TOKEN;
@@ -34,7 +37,7 @@ export default async function handler(req, res) {
   // fungere akkurat som foer den fantes. Er den med, valideres navn og slug
   // med samme strenghet som resten av stiene i denne fila, foer noe rores.
   let samlingSti = null;
-  if (samling !== undefined && samling !== null) {
+  if (harSamling) {
     if (typeof samling !== 'object' || Array.isArray(samling)) {
       return res.status(400).json({ ok: false, error: 'Ugyldig samling.' });
     }
@@ -47,11 +50,35 @@ export default async function handler(req, res) {
     if (!slugErGyldig(samling.navn)) return res.status(400).json({ ok: false, error: 'Ugyldig navn på samlingen.' });
     const samlingNavn = samling.navn;
 
+    // Innholdet valideres ferdig i behandle(), men det som kan avvises uten
+    // GitHub, avvises her, foer noe er lest.
+    const handling = samling.handling || 'ny';
+    if (!['ny', 'oppdater', 'slett', 'les'].includes(handling)) {
+      return res.status(400).json({ ok: false, error: 'Ukjent handling.' });
+    }
     const innlegg = samling.innlegg;
-    if (!innlegg || typeof innlegg !== 'object' || Array.isArray(innlegg) || !slugErGyldig(innlegg.slug)) {
+    if ((handling === 'ny' || handling === 'oppdater') &&
+        (!innlegg || typeof innlegg !== 'object' || Array.isArray(innlegg) || !slugErGyldig(innlegg.slug))) {
+      return res.status(400).json({ ok: false, error: 'Ugyldig slug på innlegget.' });
+    }
+    if (handling === 'slett' && !slugErGyldig(samling.slug)) {
       return res.status(400).json({ ok: false, error: 'Ugyldig slug på innlegget.' });
     }
     samlingSti = `content/samlinger/${samlingNavn}.json`;
+  }
+
+  // Redigeringssiden henter innleggene herfra, med utkastene, saa de aldri
+  // trenger aa ligge aapent i dist/.
+  if (harSamling && samling.handling === 'les') {
+    try {
+      const naa = await lesFil({ repo, branch, token, sti: samlingSti });
+      if (naa !== null && !Array.isArray(naa)) {
+        return res.status(500).json({ ok: false, error: 'Samlingsfila paa GitHub er ikke en liste. Rett den manuelt paa GitHub foerst.' });
+      }
+      return res.status(200).json({ ok: true, innlegg: naa || [] });
+    } catch (e) {
+      return res.status(502).json({ ok: false, error: `Fikk ikke hentet innleggene fra GitHub. Proev igjen om litt. Teknisk: ${String(e.message || e).slice(0, 120)}` });
+    }
   }
 
   // Base64 er 4 tegn per 3 byte, saa lengden paa strengen maa regnes om til
@@ -59,8 +86,8 @@ export default async function handler(req, res) {
   // en tredjedel lavere enn det satte, og teksten talte ikke med i det hele tatt.
   const byte = (s) => Math.floor(String(s).length * 3 / 4);
   const stor = bilder.reduce((sum, b) => sum + byte(b.data), 0)
-    + Buffer.byteLength(JSON.stringify(edits))
-    + (samlingSti ? Buffer.byteLength(JSON.stringify(samling.innlegg)) : 0);
+    + Buffer.byteLength(JSON.stringify(edits || {}))
+    + (samlingSti ? Buffer.byteLength(JSON.stringify(samling.innlegg || {})) : 0);
   if (stor > MAKS_PAYLOAD) {
     return res.status(413).json({
       ok: false,
@@ -80,9 +107,16 @@ export default async function handler(req, res) {
     filer.push({ sti, innhold: String(b.data).split(',').pop(), base64: true });
   }
 
-  const sidenavn = trygSidenavn(page);
-  if (!sidenavn) return res.status(400).json({ ok: false, error: 'Ugyldig sidenavn.' });
-  const innholdSti = `content/${sidenavn}.json`;
+  // Sidens egen JSON skrives bare naar det faktisk er sideendringer. Et
+  // innlegg alene skal ikke lage en tom content/<navn>.json for en side som
+  // ikke finnes.
+  const skrivSide = !!page && !!edits && (!harSamling || Object.keys(edits).length > 0);
+  let innholdSti = null;
+  if (skrivSide) {
+    const sidenavn = trygSidenavn(page);
+    if (!sidenavn) return res.status(400).json({ ok: false, error: 'Ugyldig sidenavn.' });
+    innholdSti = `content/${sidenavn}.json`;
+  }
 
   try {
     // Lesingen ligger INNE i try. Kaster den (403, 500, oedelagt fil), skal
@@ -91,11 +125,11 @@ export default async function handler(req, res) {
     // uavhengige GitHub-kall, saa de leses parallelt: sekvensielt kostet hver
     // samlings-publisering en dobbel tur-retur til GitHub.
     const [naaRaw, naaSamling] = await Promise.all([
-      lesFil({ repo, branch, token, sti: innholdSti }),
+      innholdSti ? lesFil({ repo, branch, token, sti: innholdSti }) : Promise.resolve(null),
       samlingSti ? lesFil({ repo, branch, token, sti: samlingSti }) : Promise.resolve(null)
     ]);
-    const naa = naaRaw || {};
-    filer.push({ sti: innholdSti, innhold: JSON.stringify({ ...naa, ...edits }, null, 2) });
+    if (innholdSti) filer.push({ sti: innholdSti, innhold: JSON.stringify({ ...(naaRaw || {}), ...edits }, null, 2) });
+    let resultat = null;
 
     if (samlingSti) {
       // lesFil() gir null naar fila ikke finnes enda (riktig: foerste innlegg
@@ -110,25 +144,23 @@ export default async function handler(req, res) {
           error: 'Samlingsfila paa GitHub er ikke en liste. Publiseringen ble avbrutt for aa ikke slette de andre innleggene. Rett fila manuelt paa GitHub foerst.'
         });
       }
-      // Skjemaet lager slugen fra tittelen uten aa vite hvilke som er i bruk
-      // fra foer (se editor/skjema.js). Kolliderer den likevel med et
-      // eksisterende innlegg, skal IKKE flett() sin "kjent slug"-gren treffe:
-      // det ville byttet ut et helt annet innlegg med det nye, stille. unikSlug
-      // deconflikterer FOER flett() faar se slugen, saa en kollisjon alltid
-      // blir et NYTT innlegg (med -2, -3 ...), aldri en overskriving.
-      const eksisterendeSlugs = Array.isArray(naaSamling) ? naaSamling.map((i) => i && i.slug).filter(Boolean) : [];
-      const innlegg = { ...samling.innlegg, slug: unikSlug(samling.innlegg.slug, eksisterendeSlugs) };
-      filer.push({ sti: samlingSti, innhold: JSON.stringify(flett(naaSamling, innlegg), null, 2) });
+      resultat = behandle(naaSamling, samling);
+      if (resultat.feil) return res.status(resultat.feil.status).json({ ok: false, error: resultat.feil.melding });
+      filer.push({ sti: samlingSti, innhold: JSON.stringify(resultat.liste, null, 2) });
     }
 
+    const HANDLING = { ny: 'nytt innlegg', oppdater: 'endret', slett: 'slettet' };
     const { sha } = await commitFiler({
       repo, branch, token,
-      melding: `Innhold: ${page}${bilder.length ? ` og ${bilder.length} bilde(r)` : ''}${samlingSti ? ` og 1 innlegg i ${samling.navn}` : ''} (admin)`,
+      melding: resultat
+        ? `${samling.navn}: ${HANDLING[samling.handling || 'ny']} ${resultat.slug}${bilder.length ? ` og ${bilder.length} bilde(r)` : ''} (admin)`
+        : `Innhold: ${page}${bilder.length ? ` og ${bilder.length} bilde(r)` : ''} (admin)`,
       filer
     });
     return res.status(200).json({
       ok: true,
       sha,
+      slug: resultat ? resultat.slug : undefined,
       // Tid fra push til endringen er ute. Standardverdien er et anslag.
       // Kjør `oppskalert-admin tid` paa prosjektet og sett den maalte verdien
       // i ADMIN_REBUILD_MS. En nedtelling som gaar ut foer siden er klar leser

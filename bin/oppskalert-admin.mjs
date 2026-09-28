@@ -8,8 +8,8 @@ import { build } from '../build/index.mjs';
 import { trygStI, trygSidenavn } from '../api/_stier.mjs';
 import { checkPin } from '../api/_rateLimit.mjs';
 import { kjor as kjorDoctor } from '../doctor/index.mjs';
-import { flett } from '../api/_samling.mjs';
-import { slugErGyldig, unikSlug } from '../build/samling.mjs';
+import { behandle } from '../api/_samling.mjs';
+import { slugErGyldig } from '../build/samling.mjs';
 import { lesProsjekt } from './_les-prosjekt.mjs';
 import { lesToken } from './_skall.mjs';
 import { kobler } from './_kobler.mjs';
@@ -192,7 +192,27 @@ function dev() {
         const sjekk = checkPin(req, kropp.pin, PIN);
         if (!sjekk.ok) return svar(sjekk.status, { ok: false, error: sjekk.error });
         if (req.url === '/api/verify-pin') return svar(200, { ok: true });
-        if (!kropp.page || !kropp.edits) return svar(400, { ok: false, error: 'Mangler page eller edits' });
+        // Samme regler som api/save.js: en samlingsforespoersel trenger verken
+        // side eller edits, og selve samlingsarbeidet gjoeres av behandle().
+        const { samling } = kropp;
+        const harSamling = samling !== undefined && samling !== null;
+        if (!harSamling && (!kropp.page || !kropp.edits)) return svar(400, { ok: false, error: 'Mangler page eller edits' });
+
+        let samlingSti = null;
+        if (harSamling) {
+          if (typeof samling !== 'object' || Array.isArray(samling)) {
+            return svar(400, { ok: false, error: 'Ugyldig samling.' });
+          }
+          if (!slugErGyldig(samling.navn)) return svar(400, { ok: false, error: 'Ugyldig navn på samlingen.' });
+          samlingSti = join(rot, 'content/samlinger', `${samling.navn}.json`);
+        }
+        const naaSamling = samlingSti && existsSync(samlingSti) ? JSON.parse(readFileSync(samlingSti, 'utf8')) : null;
+        if (naaSamling !== null && !Array.isArray(naaSamling)) {
+          return svar(500, { ok: false, error: 'Samlingsfila paa disk er ikke en liste. Rett den manuelt foerst.' });
+        }
+        const resultat = harSamling ? behandle(naaSamling, samling) : null;
+        if (resultat && resultat.feil) return svar(resultat.feil.status, { ok: false, error: resultat.feil.melding });
+        if (resultat && !resultat.skriv) return svar(200, { ok: true, innlegg: resultat.liste });
 
         for (const b of kropp.bilder || []) {
           const trygg = trygStI(b.sti);
@@ -201,46 +221,22 @@ function dev() {
           writeFileSync(join(rot, trygg), Buffer.from(String(b.data).split(',').pop(), 'base64'));
         }
 
-        // samling er valgfri, samme sperre som produksjon (api/save.js): finnes
-        // den ikke i kroppen, oppfoerer resten seg akkurat som foer den fantes.
-        let samlingSti = null;
-        const { samling } = kropp;
-        if (samling !== undefined && samling !== null) {
-          if (typeof samling !== 'object' || Array.isArray(samling)) {
-            return svar(400, { ok: false, error: 'Ugyldig samling.' });
-          }
-          // Samme strenghet som api/save.js: navnet maa stemme noeyaktig med
-          // filnavnet build/doctor leser, saa slugErGyldig (avviser) brukes i
-          // stedet for trygSidenavn (stripper stille).
-          if (!slugErGyldig(samling.navn)) return svar(400, { ok: false, error: 'Ugyldig navn på samlingen.' });
-          const samlingNavn = samling.navn;
-          const innlegg = samling.innlegg;
-          if (!innlegg || typeof innlegg !== 'object' || Array.isArray(innlegg) || !slugErGyldig(innlegg.slug)) {
-            return svar(400, { ok: false, error: 'Ugyldig slug på innlegget.' });
-          }
-          samlingSti = join(rot, 'content/samlinger', `${samlingNavn}.json`);
+        if (kropp.page && kropp.edits && (!harSamling || Object.keys(kropp.edits).length > 0)) {
+          const sidenavn = trygSidenavn(kropp.page);
+          if (!sidenavn) return svar(400, { ok: false, error: 'Ugyldig sidenavn.' });
+          mkdirSync(join(rot, 'content'), { recursive: true });
+          const f = join(rot, 'content', `${sidenavn}.json`);
+          const naa = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {};
+          writeFileSync(f, JSON.stringify({ ...naa, ...kropp.edits }, null, 2));
         }
 
-        const sidenavn = trygSidenavn(kropp.page);
-        if (!sidenavn) return svar(400, { ok: false, error: 'Ugyldig sidenavn.' });
-        mkdirSync(join(rot, 'content'), { recursive: true });
-        const f = join(rot, 'content', `${sidenavn}.json`);
-        const naa = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {};
-        writeFileSync(f, JSON.stringify({ ...naa, ...kropp.edits }, null, 2));
-
-        if (samlingSti) {
+        if (resultat) {
           mkdirSync(join(rot, 'content/samlinger'), { recursive: true });
-          const naaSamling = existsSync(samlingSti) ? JSON.parse(readFileSync(samlingSti, 'utf8')) : null;
-          if (naaSamling !== null && !Array.isArray(naaSamling)) {
-            return svar(500, { ok: false, error: 'Samlingsfila paa disk er ikke en liste. Rett den manuelt foerst.' });
-          }
-          const eksisterendeSlugs = Array.isArray(naaSamling) ? naaSamling.map((i) => i && i.slug).filter(Boolean) : [];
-          const nyttInnlegg = { ...samling.innlegg, slug: unikSlug(samling.innlegg.slug, eksisterendeSlugs) };
-          writeFileSync(samlingSti, JSON.stringify(flett(naaSamling, nyttInnlegg), null, 2));
+          writeFileSync(samlingSti, JSON.stringify(resultat.liste, null, 2));
         }
 
         build({ rot });
-        svar(200, { ok: true, rebuildMs: 400, note: 'Bygget lokalt' });
+        svar(200, { ok: true, slug: resultat ? resultat.slug : undefined, rebuildMs: 400, note: 'Bygget lokalt' });
       });
       return;
     }

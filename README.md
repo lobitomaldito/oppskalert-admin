@@ -107,10 +107,21 @@ Et prosjekt får en rettelse først når avhengigheten peker på den nye taggen.
 Bytt taggen og installer på nytt, kjør så `doctor` og bygget:
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.4.0"
+npm i "github:lobitomaldito/oppskalert-admin#v1.5.0"
 npx oppskalert-admin doctor .
 node build.mjs
 ```
+
+**v1.5.0:** samlinger får en egen redigeringsside (`/admin/samling`) med
+liste, nytt innlegg, rediger, skjul og slett, og `editor/skjema.js` gir store
+knapper inn dit fra nettsiden. **Endring for prosjekter med samling:** det gamle
+«Nytt innlegg»-overlegget i admin-baren er borte; knappen står nå over lista og
+går til redigeringssiden. Legg `<script src="/admin/skjema.js" defer></script>`
+også i innleggsmalen for å få Rediger-knappen der. Nytt: egen mal per samling
+(`_<navn>.html`), felttypene valg, galleri og rekkefølge, relaterte innlegg,
+`data-samling-sist`, og handlingene `oppdater`, `slett` og `les` i `/api/save`.
+Bildevelgeren i panelet godtar også avif og heic, som gjøres om til jpg i
+nettleseren (heic bare i Safari).
 
 **v1.4.0:** `doctor` fanger fire nye ting, hentet fra en sjekkliste over vanlige
 vibekoding-feil: lenker uten mål (`href="#"`, tom `href`, et internt anker uten
@@ -369,11 +380,13 @@ under vises.
 
 ```
 content/samlinger/aktuelt.json   ett innlegg per objekt i en tabell
-templates/_innlegg.html          én mal, delt av alle innlegg i alle samlinger
+templates/_aktuelt.html          malen for denne samlingen (valgfri)
+templates/_innlegg.html          malen for samlinger uten sin egen
 ```
 
 Navnet på `.json`-fila (uten endelsen) blir samlingens navn og URL-segment:
-`aktuelt.json` bygger sidene på `/aktuelt/<slug>/`. Én mal per prosjekt holder
+`aktuelt.json` bygger sidene på `/aktuelt/<slug>/`. Har samlingen en egen mal,
+`templates/_<navn>.html`, brukes den; ellers `_innlegg.html`. Én mal per prosjekt holder
 til vi ser et kundebehov for flere.
 
 Et innlegg:
@@ -423,16 +436,85 @@ skjema og host. Finnes ingen slik fil, skrives ingen `dist/sitemap.xml`, og
 bygget sier fra i stedet. Sitemap-protokollen krever fullt kvalifiserte URL-er,
 og motoren kjenner ikke kundens domene fra noe annet sted.
 
-`editor/skjema.js` gir klienten «Nytt innlegg»-knappen og skjemaet den åpner.
-Filen kopieres til `dist/admin/` av bygget, men må lenkes i malen manuelt,
-akkurat som `detail-modal.js` og `kollaps.js`:
+### Redigeringssiden
+
+Klienten skriver, retter, skjuler og sletter innlegg på `/admin/samling?navn=<samling>`:
+en liste over innleggene, en stor knapp for nytt innlegg, og et skjema med de
+feltene malen har. Siden logger inn med samme PIN som resten av panelet.
+Innleggene hentes fra GitHub gjennom `/api/save`, med utkastene, så de aldri
+ligger åpent i `dist/`. Hvert trykk på Publiser er ett commit og ett bygg,
+bildene med. Bildene gjøres om til jpg (maks 1600 px) i nettleseren, også
+avif og heic.
+
+`editor/skjema.js` gir inngangene fra selve nettsiden, og bare for en innlogget
+admin: en stor knapp foran hver `[data-samling]`-liste, som åpner et tomt
+skjema, og en fast «Rediger»-knapp på hver innleggsside. Den må lenkes i malene
+manuelt, både på siden med lista og i innleggsmalen:
 
 ```html
 <script src="/admin/skjema.js" defer></script>
 ```
 
-Uten scripttaggen vises aldri «Nytt innlegg»-knappen, selv om samlingen finnes
-og malen er instrumentert.
+Skjemaets felt lages av innleggsmalen (bygget skriver dem til
+`dist/admin/samlinger.json`). Hvert `data-innlegg`, `data-innlegg-image` og
+`data-innlegg-galleri` utenfor `[data-relaterte]`, `<title>` og `<meta>` blir
+ett felt:
+
+| Merke i malen | Felt i skjemaet |
+|---|---|
+| `data-innlegg` på `h1`–`h6`, `span` o.l. | én linje |
+| `data-innlegg` på `p`, `blockquote` | kort tekst |
+| `data-innlegg` på `div`, `section`, `article` | lang tekst, tom linje gir nytt avsnitt |
+| `data-innlegg-type="linje\|kort\|lang"` | overstyrer typen over |
+| `data-innlegg-valg="Til salgs\|Solgt"` | valgknapper; lista får en hurtigknapp som bytter mellom de to første |
+| `data-innlegg-image="felt"` | ett bilde |
+| `data-innlegg-galleri="felt"` | inntil 8 bilder; bygget skriver ett `<img>` per adresse |
+| `data-innlegg-etikett="Pris"` | overskriften på feltet |
+| `data-innlegg-hjelp="F.eks. 2 500 kr"` | hjelpeteksten under |
+| `data-innlegg-rekke="1"` | rekkefølgen i skjemaet, når den skal være en annen enn på siden |
+
+På lista:
+
+| Attributt | Virkning |
+|---|---|
+| `data-samling-ny="Legg ut nytt møbel til salgs"` | teksten på den store knappen og overskriften i skjemaet |
+| `data-samling-tittel="Møbler til salgs"` | overskriften på redigeringssiden |
+| `data-samling-sist="status=solgt"` | innlegg der feltet inneholder verdien, havner sist, før `data-samling-antall` kutter |
+
+På `<body>` i innleggsmalen: `data-samling-rediger="Rediger møbelet"` gir
+teksten på Rediger-knappen. Bygget setter selv `data-samling-innlegg="<samling>/<slug>"`.
+
+### Relaterte innlegg
+
+```html
+<section data-relaterte="4" data-relaterte-sist="status=solgt">
+  <h2>Flere møbler til salgs</h2>
+  <div class="varer">
+    <a data-relatert data-samling-lenke href="/tilsalgs/">
+      <img data-innlegg-image="bilde" src="/tom.jpg" alt="">
+      <span data-innlegg="tittel">Tittel</span>
+    </a>
+  </div>
+</section>
+```
+
+`[data-relatert]` er kortmalen, klonet for hvert av de N neste innleggene i
+listerekkefølge (nyeste først), fra innlegget etter dette og rundt. Uten andre
+innlegg fjernes hele seksjonen. `<title>` og `<meta>` med `data-innlegg` får ren
+tekst, og `{}` i malens tekst byttes mot verdien: `{} | Butikknavn`.
+
+### API: handlinger på en samling
+
+`POST /api/save` med `samling: { navn, handling, ... }` og uten `page`/`edits`:
+
+| `handling` | Gjør |
+|---|---|
+| `ny` (standard) | legger `innlegg` først; en slug i bruk får `-2`, aldri overskriving |
+| `oppdater` | bytter ut innlegget med samme slug, som må finnes (ellers 404) |
+| `slett` | fjerner innlegget med `samling.slug` |
+| `les` | svarer `{ ok, innlegg }` uten å committe |
+
+Sidens egen `content/<side>.json` skrives bare når `edits` har innhold.
 
 ## Kjente begrensninger
 

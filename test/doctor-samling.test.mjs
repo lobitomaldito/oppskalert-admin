@@ -200,3 +200,38 @@ test('doctor: et korrekt bygget samling-prosjekt gir null feil-funn i hele STAND
   const { feil } = kjor(prosjekt, STANDARDREGLER);
   assert.deepEqual(feil, []);
 });
+
+// --- egen mal per samling ---
+
+test('samling-mal: templates/_<navn>.html holder, uten _innlegg.html', () => {
+  assert.deepEqual(samlingMal.sjekk(p([
+    { sti: 'content/samlinger/tilsalgs.json', tekst: '[]' },
+    { sti: 'templates/_tilsalgs.html', tekst: '<h1 data-innlegg="tittel">X</h1>' }
+  ])), []);
+});
+
+test('samling-mal: to samlinger, bare den uten mal meldes', () => {
+  const funn = samlingMal.sjekk(p([
+    { sti: 'content/samlinger/tilsalgs.json', tekst: '[]' },
+    { sti: 'content/samlinger/aktuelt.json', tekst: '[]' },
+    { sti: 'templates/_tilsalgs.html', tekst: '<h1>X</h1>' }
+  ]));
+  assert.equal(funn.length, 1);
+  assert.match(funn[0].melding, /_aktuelt\.html/);
+});
+
+test('mal-understrek: _<samling>.html er en samlingsmal og meldes ikke', () => {
+  assert.deepEqual(malUnderstrek.sjekk(p([
+    { sti: 'content/samlinger/tilsalgs.json', tekst: '[]' },
+    { sti: 'templates/_tilsalgs.html', tekst: '<h1>X</h1>' }
+  ])), []);
+});
+
+test('samling-felt: sjekker samlingens egen mal, galleriet med', () => {
+  const funn = samlingFelt.sjekk(p([
+    { sti: 'content/samlinger/tilsalgs.json', tekst: JSON.stringify([{ slug: 'a', tittel: 'A', galleri: [] }]) },
+    { sti: 'templates/_tilsalgs.html', tekst: '<h1 data-innlegg="tittel">X</h1>\n<div data-innlegg-galleri="galleri"></div>\n<p data-innlegg="pirs"></p>' }
+  ]));
+  assert.equal(funn.length, 1);
+  assert.match(funn[0].melding, /pirs/);
+});

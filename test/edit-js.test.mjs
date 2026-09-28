@@ -29,3 +29,13 @@ test('ES5-nivaa: ingen pilfunksjoner, let eller const', () => {
 test('ingen tankestrek i fila', () => {
   assert.equal(js.includes('—'), false);
 });
+
+test('et trykk paa en samlingslenke navigerer ikke bort under redigering', () => {
+  assert.match(js, /closest\('\[data-samling-lenke\]'\)\) e\.preventDefault\(\)/);
+});
+
+test('avif og heic kan velges og gjoeres alltid om til jpg foer opplasting', () => {
+  assert.match(js, /fileInput\.accept = '[^']*\.avif[^']*\.heic/);
+  assert.match(js, /TIL_JPG = \/\^image\\\/\(avif\|heic\|heif\)\$/);
+  assert.match(js, /if \(!tilJpg && Math\.max\(sw, sh\) <= 1800/);
+});

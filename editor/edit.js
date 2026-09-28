@@ -255,10 +255,12 @@
   // Single hidden file-input reused for all uploads
   var fileInput = document.createElement('input');
   fileInput.type = 'file';
-  // Bare de fire formatene serveren godtar. 'image/*' slapp inn svg, heic, bmp,
-  // avif og tiff, og en IMG_9876.HEIC rett fra en iPhone ble foerst avvist ved
-  // publisering.
-  fileInput.accept = '.jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif';
+  // De fire formatene serveren godtar, pluss avif og heic, som prepImage gjoer
+  // om til jpg foer opplasting. 'image/*' slapp inn svg, bmp og tiff, og en fil
+  // nettleseren ikke kan lese ble foerst avvist ved publisering. Avif kom inn
+  // 2026-09-28: Schei sine varebilder kommer som .avif, og uten dem i lista
+  // saa hun ikke filene sine i velgeren i det hele tatt.
+  fileInput.accept = '.jpg,.jpeg,.png,.webp,.gif,.avif,.heic,.heif,image/jpeg,image/png,image/webp,image/gif,image/avif,image/heic,image/heif';
   fileInput.style.display = 'none';
   document.body.appendChild(fileInput);
   var pendingEl = null, pendingAddGalleri = null, MAX_GALLERI = 6;
@@ -573,13 +575,18 @@
   // (max 1800px long side, JPEG q82). Small images pass through untouched. EXIF
   // orientation is baked in via createImageBitmap so photos never come out rotated.
   // Bonus: the upload payload drops from tens of MB to a few hundred KB.
+  // avif og heic tar serveren ikke imot, saa de gjoeres alltid om til jpg, ogsaa
+  // naar de er smaa. Kan ikke nettleseren lese fila (heic utenfor Safari), gaar
+  // den videre som den er og avvises av endelsessjekken med en melding hun forstaar.
+  var TIL_JPG = /^image\/(avif|heic|heif)$|\.(avif|heic|heif)$/i;
   function prepImage(file, cb) {
     var pass = function () { var r = new FileReader(); r.onload = function () { cb(r.result, file.name, file.type); }; r.readAsDataURL(file); };
-    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return pass(); // leave gif/svg/etc. alone
+    var tilJpg = TIL_JPG.test(file.type) || TIL_JPG.test(file.name);
+    if (!tilJpg && !/^image\/(jpeg|png|webp)$/.test(file.type)) return pass(); // leave gif/svg/etc. alone
     var done = false;
     function finish(src, sw, sh) {
       if (done) return; done = true;
-      if (Math.max(sw, sh) <= 1800 && file.size < 800 * 1024) { if (src.close) src.close(); return pass(); } // already small
+      if (!tilJpg && Math.max(sw, sh) <= 1800 && file.size < 800 * 1024) { if (src.close) src.close(); return pass(); } // already small
       var scale = Math.min(1, 1800 / Math.max(sw, sh));
       var w = Math.round(sw * scale), h = Math.round(sh * scale);
       var c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -913,6 +920,9 @@
     if (imgMenu.contains(e.target)) return;            // the menu handles its own clicks
     if (posBar && posBar.contains(e.target)) return;   // ditto the positioning bar
     if (posEl && posEl === e.target) return;           // a click on the image being dragged
+    // Et kort i en samling lenker til innleggets egen side. Under redigering
+    // skal et trykk der ikke navigere bort fra endringer som ikke er publisert.
+    if (e.target.closest && e.target.closest('[data-samling-lenke]')) e.preventDefault();
     var img = e.target;
     // The photo at the top of an open "Les mer" modal. Repositioning is the only
     // thing that makes sense on it (swapping/deleting belong to the card), so skip
