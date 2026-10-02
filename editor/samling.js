@@ -312,7 +312,12 @@
       var c = document.createElement('canvas');
       c.width = Math.round(b * skala);
       c.height = Math.round(h * skala);
-      c.getContext('2d').drawImage(kilde, 0, 0, c.width, c.height);
+      var ctx = c.getContext('2d');
+      // jpg kan ikke vaere gjennomsiktig. Uten hvit bunn blir gjennomsiktige
+      // piksler i en png, webp eller avif svarte.
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(kilde, 0, 0, c.width, c.height);
       if (kilde.close) kilde.close();
       try { ferdig(null, c.toDataURL('image/jpeg', 0.82)); } catch (e) { ferdig(e); }
     }

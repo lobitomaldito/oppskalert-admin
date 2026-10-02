@@ -79,6 +79,10 @@ test('samling.js sender bildene med samme kall som innlegget, og konverterer alt
   assert.match(side, /accept: '[^']*\.avif[^']*\.heic/);
 });
 
+test('samling.js legger hvit bunn under bildet foer det blir jpg', () => {
+  assert.match(side, /ctx\.fillStyle = '#fff';\s*ctx\.fillRect\(0, 0, c\.width, c\.height\);\s*ctx\.drawImage\(kilde/);
+});
+
 test('samling.js setter aldri innleggstekst med innerHTML', () => {
   const bruk = side.match(/innerHTML\s*=\s*[^;]+;/g) || [];
   assert.deepEqual([...new Set(bruk)], ["innerHTML = '';"]);

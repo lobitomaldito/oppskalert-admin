@@ -1,6 +1,6 @@
 {
   "name": "oppskalert-admin",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Inline redigering og publisering til git for statiske sider.",
   "type": "module",
   "license": "MIT",

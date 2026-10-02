@@ -107,10 +107,14 @@ Et prosjekt får en rettelse først når avhengigheten peker på den nye taggen.
 Bytt taggen og installer på nytt, kjør så `doctor` og bygget:
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.5.1"
+npm i "github:lobitomaldito/oppskalert-admin#v1.5.2"
 npx oppskalert-admin doctor .
 node build.mjs
 ```
+
+**v1.5.2:** et bilde med gjennomsiktighet som lastes opp på redigeringssiden
+for samlinger (`/admin/samling`), får hvit bunn når det gjøres om til jpg.
+Før ble de gjennomsiktige delene svarte.
 
 **v1.5.1:** et png-bilde uten gjennomsiktighet (skjermbilde, bokomslag) lagres
 nå som jpg når panelet krymper det. Før forble det png, kvaliteten virket ikke,
