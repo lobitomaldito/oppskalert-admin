@@ -107,10 +107,17 @@ Et prosjekt får en rettelse først når avhengigheten peker på den nye taggen.
 Bytt taggen og installer på nytt, kjør så `doctor` og bygget:
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.5.0"
+npm i "github:lobitomaldito/oppskalert-admin#v1.5.1"
 npx oppskalert-admin doctor .
 node build.mjs
 ```
+
+**v1.5.1:** et png-bilde uten gjennomsiktighet (skjermbilde, bokomslag) lagres
+nå som jpg når panelet krymper det. Før forble det png, kvaliteten virket ikke,
+og et enkelt bilde kunne fylle hele publiseringskøen og gi meldingen «For mange
+bilder på én gang». En png med gjennomsiktige piksler forblir png. Er ett bilde
+alene over grensen, sier panelet nå «Bildet er for stort» i stedet. jpg-bilder
+laget av webp eller avif med gjennomsiktighet får hvit bunn, før ble den svart.
 
 **v1.5.0:** samlinger får en egen redigeringsside (`/admin/samling`) med
 liste, nytt innlegg, rediger, skjul og slett, og `editor/skjema.js` gir store

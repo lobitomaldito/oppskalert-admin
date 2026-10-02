@@ -578,7 +578,14 @@
   // avif og heic tar serveren ikke imot, saa de gjoeres alltid om til jpg, ogsaa
   // naar de er smaa. Kan ikke nettleseren lese fila (heic utenfor Safari), gaar
   // den videre som den er og avvises av endelsessjekken med en melding hun forstaar.
+  // png forblir png bare naar bildet faktisk har gjennomsiktige piksler. Kvaliteten
+  // 0.82 virker ikke paa png, saa et skjermbilde eller et bokomslag lagret som png
+  // var fortsatt flere MB etter krympingen og sprengte koeen alene.
   var TIL_JPG = /^image\/(avif|heic|heif)$|\.(avif|heic|heif)$/i;
+  function harAlfa(px) {
+    for (var i = 3; i < px.length; i += 4) if (px[i] < 255) return true;
+    return false;
+  }
   function prepImage(file, cb) {
     var pass = function () { var r = new FileReader(); r.onload = function () { cb(r.result, file.name, file.type); }; r.readAsDataURL(file); };
     var tilJpg = TIL_JPG.test(file.type) || TIL_JPG.test(file.name);
@@ -590,10 +597,15 @@
       var scale = Math.min(1, 1800 / Math.max(sw, sh));
       var w = Math.round(sw * scale), h = Math.round(sh * scale);
       var c = document.createElement('canvas'); c.width = w; c.height = h;
-      c.getContext('2d').drawImage(src, 0, 0, w, h);
-      if (src.close) src.close();
+      var ctx = c.getContext('2d');
       var isPng = file.type === 'image/png';
-      var type = isPng ? 'image/png' : 'image/jpeg';
+      // jpg kan ikke vaere gjennomsiktig, og gjennomsiktige piksler blir svarte
+      // uten en hvit bunn under (webp og avif kan ha alfa). En png uten alfa
+      // trenger ingen bunn, den dekker hele lerretet selv.
+      if (!isPng) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
+      ctx.drawImage(src, 0, 0, w, h);
+      if (src.close) src.close();
+      var type = isPng && harAlfa(ctx.getImageData(0, 0, w, h).data) ? 'image/png' : 'image/jpeg';
       var data = c.toDataURL(type, 0.82);
       var navn = file.name;
       if (type === 'image/jpeg' && !/\.jpe?g$/i.test(navn)) navn = navn.replace(/\.[^.]+$/, '') + '.jpg';
@@ -632,6 +644,13 @@
     }
     return sum;
   }
+  // Et bilde som alene er over grensen, kommer aldri inn, uansett hvor mye
+  // som publiseres foerst. Da skal meldingen si at bildet er for stort.
+  function koeFeil(bilde, koe) {
+    if (bilde > MAKS_KOE) return '✗ Bildet er for stort. Prøv et mindre bilde eller lagre det som JPG.';
+    if (koe + bilde > MAKS_KOE) return '✗ For mange bilder på én gang. Trykk Publiser først, så legger du til resten etterpå.';
+    return '';
+  }
 
   function uploadImage(file, el, onUrl) {
     status.textContent = 'Behandler bilde …';
@@ -645,11 +664,8 @@
         status.textContent = '✗ Formatet støttes ikke. Bruk jpg, png, webp eller gif.';
         return;
       }
-      var nyStorrelse = koeStorrelse() + Math.floor(String(data).length * 3 / 4);
-      if (nyStorrelse > MAKS_KOE) {
-        status.textContent = '✗ For mange bilder på én gang. Trykk Publiser først, så legger du til resten etterpå.';
-        return;
-      }
+      var feil = koeFeil(Math.floor(String(data).length * 3 / 4), koeStorrelse());
+      if (feil) { status.textContent = feil; return; }
       var url = '/assets/uploads/' + filnavn;
 
       ventendeBilder.push({ sti: 'static/assets/uploads/' + filnavn, data: data });
