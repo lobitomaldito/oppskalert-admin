@@ -59,6 +59,113 @@
     return s.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   }
 
+  // rensHtml slipper bare gjennom formateringen tekstfeltet tilbyr: avsnitt,
+  // mellomtittel (h2, h3), fet, kursiv, lister og lenker. Alt annet blir ren
+  // tekst eller forsvinner: stiler og klasser fra Word, span, font, bilder,
+  // skript. Brukes paa alt som skal inn i eller ut av et formatert felt, ogsaa
+  // det som limes inn. Tekst som ligger loest, eller i en div (Chrome lager
+  // div-linjer), pakkes i <p>. Tomme avsnitt fjernes.
+  var BLOKK = { p: 'p', h1: 'h2', h2: 'h2', h3: 'h3', h4: 'h3', h5: 'h3', h6: 'h3' };
+  var LISTE = { ul: 'ul', ol: 'ol' };
+  var INLINE = { strong: 'strong', b: 'strong', em: 'em', i: 'em', a: 'a' };
+  var GRENSE = /^(div|blockquote|section|article|header|footer|figure|table|thead|tbody|tr|td|th|pre|hr)$/;
+  var TRYGG_LENKE = /^(https?:\/\/|mailto:|tel:|\/|#)/i;
+
+  function rensHtml(html) {
+    var s = String(html == null ? '' : html)
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<(script|style|head|title|xml|template|noscript)\b[\s\S]*?<\/\1\s*>/gi, '');
+    var ut = '', blokk = null, blokkStart = 0, liste = null, dybde = 0, inline = [];
+    var bit = /<(\/?)([a-zA-Z][\w:-]*)([^>]*)>|([^<]+)|</g, m;
+
+    function lukkListe() {
+      if (liste) ut += '</' + liste + '>';
+      liste = null; dybde = 0;
+    }
+    function lukkBlokk() {
+      if (!blokk) return;
+      for (var i = inline.length - 1; i >= 0; i--) ut += '</' + inline[i] + '>';
+      inline = [];
+      ut += '</' + blokk + '>';
+      var innhold = ut.slice(blokkStart).replace(/<[^>]*>/g, '').replace(/&nbsp;|\s/g, '');
+      if (!innhold) ut = ut.slice(0, blokkStart);
+      blokk = null;
+    }
+    function aapneBlokk(tag) {
+      blokkStart = ut.length;
+      ut += '<' + tag + '>';
+      blokk = tag;
+    }
+    function sikreBlokk() {
+      if (!blokk) aapneBlokk(liste ? 'li' : 'p');
+    }
+
+    while ((m = bit.exec(s))) {
+      if (m[4] !== undefined || m[0] === '<') {
+        var tekst = m[0] === '<' ? '&lt;' : m[4].replace(/>/g, '&gt;');
+        if (!blokk && !/\S/.test(tekst.replace(/&nbsp;/g, ' '))) continue;
+        sikreBlokk();
+        ut += tekst;
+        continue;
+      }
+      var slutt = m[1] === '/', navn = m[2].toLowerCase(), attr = m[3];
+
+      if (navn === 'br') { if (blokk) ut += '<br>'; continue; }
+
+      if (BLOKK[navn]) {
+        if (blokk === 'li') continue; // Word legger <p> inne i <li>
+        lukkBlokk();
+        if (!slutt) { lukkListe(); aapneBlokk(BLOKK[navn]); }
+        continue;
+      }
+      if (LISTE[navn]) {
+        lukkBlokk();
+        if (!slutt) {
+          if (liste) dybde++;
+          else { liste = LISTE[navn]; dybde = 1; ut += '<' + liste + '>'; }
+        } else if (liste && --dybde <= 0) {
+          lukkListe();
+        }
+        continue;
+      }
+      if (navn === 'li') {
+        lukkBlokk();
+        if (!slutt) {
+          if (!liste) { liste = 'ul'; dybde = 1; ut += '<ul>'; }
+          aapneBlokk('li');
+        }
+        continue;
+      }
+      if (INLINE[navn]) {
+        var tag = INLINE[navn];
+        if (slutt) {
+          var pos = inline.lastIndexOf(tag);
+          if (pos < 0) continue;
+          for (var j = inline.length - 1; j >= pos; j--) ut += '</' + inline[j] + '>';
+          inline.length = pos;
+          continue;
+        }
+        var start = '<' + tag + '>';
+        if (tag === 'a') {
+          var h = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attr);
+          var href = h ? (h[1] || h[2] || h[3] || '').trim() : '';
+          if (!TRYGG_LENKE.test(href)) continue;
+          start = '<a href="' + href.replace(/"/g, '&quot;') + '"' +
+            (/^https?:/i.test(href) ? ' target="_blank" rel="noopener"' : '') + '>';
+        }
+        sikreBlokk();
+        ut += start;
+        inline.push(tag);
+        continue;
+      }
+      if (GRENSE.test(navn) && blokk !== 'li') lukkBlokk();
+      // alt annet (span, font, u, o:p, img ...) slippes, teksten inni beholdes
+    }
+    lukkBlokk();
+    lukkListe();
+    return ut.replace(/<(ul|ol)><\/\1>/g, '');
+  }
+
   function iDag() {
     var d = new Date();
     function to(n) { return (n < 10 ? '0' : '') + n; }
@@ -75,7 +182,7 @@
 
   window.oppskalertSamling = {
     lagSlug: lagSlug, escapeHtml: escapeHtml, tekstTilHtml: tekstTilHtml,
-    htmlTilTekst: htmlTilTekst, sorter: sorter
+    htmlTilTekst: htmlTilTekst, sorter: sorter, rensHtml: rensHtml
   };
 
   var app = document.getElementById('samling-app');
@@ -106,8 +213,8 @@
   // -------------------------------------------------------
   //  DOM
   // -------------------------------------------------------
-  // All tekst fra innleggene settes med textContent. Ingenting herfra gaar
-  // gjennom innerHTML.
+  // All tekst fra innleggene settes med textContent. Det eneste unntaket er det
+  // formaterte tekstfeltet, og det faar bare HTML som har gaatt gjennom rensHtml.
   function el(tag, egenskaper, barn) {
     var e = document.createElement(tag);
     var k;
@@ -434,6 +541,104 @@
   // -------------------------------------------------------
   //  SKJEMA
   // -------------------------------------------------------
+  // -------------------------------------------------------
+  //  FORMATERT TEKSTFELT (felttypen lang)
+  // -------------------------------------------------------
+  // Et contenteditable-felt med en knapperad. Klienten ser formateringen mens
+  // hun skriver, ingen koder. Alt som kommer inn (lagret innlegg, innliming fra
+  // Word eller nettsider) og alt som gaar ut, gaar gjennom rensHtml, saa bare
+  // avsnitt, h2, h3, fet, kursiv, lister og lenker kan havne paa siden.
+  // execCommand er formelt utgaatt, men er det eneste som gir nettleserens egen
+  // angre-historikk i et redigerbart felt, og virker i alle nettlesere i dag.
+  var RIK_KNAPPER = [
+    { tekst: 'Mellomtittel', kmd: 'h2', hint: 'Gjør avsnittet til en mellomtittel, trykk igjen for vanlig tekst' },
+    { tekst: 'Fet', kmd: 'bold', stil: 'font-weight:700', hint: 'Fet (Cmd/Ctrl+B)' },
+    { tekst: 'Kursiv', kmd: 'italic', stil: 'font-style:italic', hint: 'Kursiv (Cmd/Ctrl+I)' },
+    { tekst: '• Punktliste', kmd: 'insertUnorderedList', hint: 'Punktliste' },
+    { tekst: '1. Nummerert', kmd: 'insertOrderedList', hint: 'Nummerert liste' },
+    { tekst: 'Lenke', kmd: 'lenke', hint: 'Lag lenke av den merkede teksten' }
+  ];
+
+  function lagRikTekst(id, html) {
+    var flate = el('div', { klasse: 'rik__flate', id: id, contenteditable: 'true', role: 'textbox',
+      'aria-multiline': 'true', 'aria-labelledby': id + '-etikett' });
+    flate.innerHTML = rensHtml(html) || '<p><br></p>';
+
+    function blokkNaa() { return String(document.queryCommandValue('formatBlock') || '').toLowerCase(); }
+
+    function utfoer(kmd) {
+      flate.focus();
+      document.execCommand('defaultParagraphSeparator', false, 'p');
+      if (kmd === 'h2') {
+        document.execCommand('formatBlock', false, blokkNaa() === 'h2' ? 'p' : 'h2');
+      } else if (kmd === 'lenke') {
+        var url = window.prompt('Adressen lenken skal gå til (tomt felt fjerner lenken):', 'https://');
+        if (url === null) return;
+        url = url.trim();
+        if (!url || url === 'https://') { document.execCommand('unlink'); return; }
+        if (!TRYGG_LENKE.test(url)) url = (url.indexOf('@') > 0 ? 'mailto:' : 'https://') + url;
+        var valg = window.getSelection();
+        // ingen tekst merket: adressen selv blir lenketeksten
+        if (valg && valg.isCollapsed) document.execCommand('insertHTML', false, '<a href="' + escapeHtml(url).replace(/"/g, '&quot;') + '">' + escapeHtml(url) + '</a>');
+        else document.execCommand('createLink', false, url);
+      } else if (kmd === 'insertUnorderedList' || kmd === 'insertOrderedList') {
+        // Chrome legger lista inne i <p> og flytter markoeren til starten av
+        // linja. Lista loeftes ut av avsnittet, og markoeren settes tilbake.
+        var s = window.getSelection();
+        var a = s.anchorNode, ao = s.anchorOffset, fn = s.focusNode, fo = s.focusOffset;
+        document.execCommand(kmd);
+        Array.prototype.forEach.call(flate.querySelectorAll('p > ul, p > ol'), function (liste) {
+          var p = liste.parentNode;
+          while (p.firstChild) p.parentNode.insertBefore(p.firstChild, p);
+          p.parentNode.removeChild(p);
+        });
+        if (a && fn && flate.contains(a) && flate.contains(fn)) {
+          try { s.setBaseAndExtent(a, ao, fn, fo); } catch (e) { /* noden endret lengde, la markoeren staa */ }
+        }
+      } else {
+        document.execCommand(kmd);
+      }
+      oppdater();
+    }
+
+    var knapper = RIK_KNAPPER.map(function (k) {
+      var b = el('button', { type: 'button', tekst: k.tekst, title: k.hint, 'aria-pressed': 'false' });
+      if (k.stil) b.setAttribute('style', k.stil);
+      // mousedown ville flyttet fokus ut av feltet og mistet markeringen
+      b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      b.addEventListener('click', function () { utfoer(k.kmd); });
+      b._kmd = k.kmd;
+      return b;
+    });
+
+    function oppdater() {
+      var valg = window.getSelection();
+      if (!valg || !valg.anchorNode || !flate.contains(valg.anchorNode)) return;
+      knapper.forEach(function (b) {
+        var paa = false;
+        try {
+          if (b._kmd === 'h2') paa = blokkNaa() === 'h2';
+          else if (b._kmd !== 'lenke') paa = document.queryCommandState(b._kmd);
+        } catch (e) { paa = false; }
+        b.setAttribute('aria-pressed', paa ? 'true' : 'false');
+      });
+    }
+    document.addEventListener('selectionchange', oppdater);
+
+    flate.addEventListener('paste', function (e) {
+      var d = e.clipboardData;
+      if (!d) return;
+      e.preventDefault();
+      var h = d.getData('text/html');
+      document.execCommand('insertHTML', false, h ? rensHtml(h) : tekstTilHtml(d.getData('text/plain')));
+    });
+    // Bilder skal inn via bildefeltet, ikke dras inn i teksten
+    flate.addEventListener('drop', function (e) { e.preventDefault(); });
+    flate.addEventListener('focus', function () { document.execCommand('defaultParagraphSeparator', false, 'p'); });
+
+    return { flate: flate, el: el('div', { klasse: 'rik' }, [el('div', { klasse: 'rik__verktoy', role: 'toolbar', 'aria-label': 'Formatering' }, knapper), flate]) };
+  }
+
   function visSkjema(eksisterende) {
     var utkast = eksisterende ? JSON.parse(JSON.stringify(eksisterende)) : { dato: iDag() };
     var lesere = [];   // funksjoner som skriver feltverdiene inn i utkast
@@ -443,15 +648,21 @@
       var id = 'f-' + f.navn;
       var hjelp = f.hjelp ? el('small', { tekst: f.hjelp }) : null;
 
-      if (f.type === 'linje' || f.type === 'kort' || f.type === 'lang') {
+      if (f.type === 'lang') {
+        var rik = lagRikTekst(id, utkast[f.navn]);
+        if (!foersteInn) foersteInn = rik.flate;
+        if (!hjelp) hjelp = el('small', { tekst: 'Enter gir nytt avsnitt. Merk tekst og bruk knappene for mellomtittel, fet, kursiv, lister og lenker.' });
+        lesere.push(function () { utkast[f.navn] = rensHtml(rik.flate.innerHTML); });
+        return el('div', { klasse: 'felt' }, [el('span', { id: id + '-etikett', tekst: f.etikett }), hjelp, rik.el]);
+      }
+
+      if (f.type === 'linje' || f.type === 'kort') {
         var inn = f.type === 'linje'
           ? el('input', { type: 'text', id: id, value: htmlTilTekst(utkast[f.navn]) })
-          : el('textarea', { id: id, rows: f.type === 'lang' ? 9 : 3, value: htmlTilTekst(utkast[f.navn]) });
+          : el('textarea', { id: id, rows: 3, value: htmlTilTekst(utkast[f.navn]) });
         if (!foersteInn) foersteInn = inn;
-        if (f.type === 'lang' && !hjelp) hjelp = el('small', { tekst: 'En tom linje mellom avsnittene gir nytt avsnitt.' });
         lesere.push(function () {
-          var v = inn.value.trim();
-          utkast[f.navn] = f.type === 'lang' ? tekstTilHtml(v) : escapeHtml(v).replace(/\r?\n/g, '<br>');
+          utkast[f.navn] = escapeHtml(inn.value.trim()).replace(/\r?\n/g, '<br>');
         });
         return el('label', { klasse: 'felt', htmlFor: id }, [el('span', { tekst: f.etikett }), hjelp, inn]);
       }

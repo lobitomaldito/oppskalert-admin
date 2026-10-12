@@ -107,10 +107,21 @@ Et prosjekt får en rettelse først når avhengigheten peker på den nye taggen.
 Bytt taggen og installer på nytt, kjør så `doctor` og bygget:
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.5.2"
+npm i "github:lobitomaldito/oppskalert-admin#v1.5.4"
 npx oppskalert-admin doctor .
 node build.mjs
 ```
+
+**v1.5.4:** lange tekstfelt på redigeringssiden (`data-innlegg` på `div`,
+`section`, `article`) er formaterte felt i stedet for et vanlig tekstfelt:
+knapper for mellomtittel, fet, kursiv, punktliste, nummerert liste og lenke, og
+klienten ser formateringen mens hun skriver. Innliming fra Word og nettsider
+beholder fet, kursiv, lister, titler og lenker og mister resten. Alt renses mot
+en hviteliste (`p`, `h2`, `h3`, `strong`, `em`, `ul`, `ol`, `li`, `a`, `br`)
+på vei inn og ut. **Endring for prosjekter med samling:** innleggsmalen bør
+style `h2`, `h3`, `ul`, `ol` og `a` inne i brødteksten, ellers ser en
+mellomtittel ut som vanlig tekst på siden. Gamle innlegg er rene `<p>` og
+vises som før.
 
 **v1.5.2:** et bilde med gjennomsiktighet som lastes opp på redigeringssiden
 for samlinger (`/admin/samling`), får hvit bunn når det gjøres om til jpg.
@@ -478,7 +489,7 @@ ett felt:
 |---|---|
 | `data-innlegg` på `h1`–`h6`, `span` o.l. | én linje |
 | `data-innlegg` på `p`, `blockquote` | kort tekst |
-| `data-innlegg` på `div`, `section`, `article` | lang tekst, tom linje gir nytt avsnitt |
+| `data-innlegg` på `div`, `section`, `article` | formatert tekst: mellomtittel, fet, kursiv, lister og lenker |
 | `data-innlegg-type="linje\|kort\|lang"` | overstyrer typen over |
 | `data-innlegg-valg="Til salgs\|Solgt"` | valgknapper; lista får en hurtigknapp som bytter mellom de to første |
 | `data-innlegg-image="felt"` | ett bilde |

@@ -43,6 +43,18 @@
   .valg label{flex:1 1 140px;display:flex;align-items:center;justify-content:center;gap:10px;min-height:56px;padding:0 16px;border:2px solid var(--linje);border-radius:12px;background:var(--hvit);cursor:pointer;font-weight:600}
   .valg input{width:20px;height:20px;accent-color:var(--a)}
   .valg label:has(input:checked){border-color:var(--a)}
+  .rik{border:1px solid var(--linje);border-radius:10px;background:var(--hvit)}
+  .rik:focus-within{border-color:var(--a);box-shadow:0 0 0 1px var(--a)}
+  .rik__verktoy{position:sticky;top:0;z-index:1;display:flex;flex-wrap:wrap;gap:6px;padding:8px;border-bottom:1px solid var(--linje);border-radius:10px 10px 0 0;background:var(--flate)}
+  .rik__verktoy button{min-height:40px;padding:0 12px;border:1px solid var(--linje);border-radius:8px;background:var(--hvit);font-size:15px;cursor:pointer}
+  .rik__verktoy button[aria-pressed=true]{border-color:var(--a);color:var(--a);box-shadow:inset 0 0 0 1px var(--a)}
+  .rik__flate{min-height:18rem;padding:16px 18px;font-size:18px;line-height:1.6;outline:0;overflow-wrap:anywhere}
+  .rik__flate>*+*{margin-top:.8em}
+  .rik__flate h2{font-size:23px;line-height:1.25;margin-top:1.3em}
+  .rik__flate h3{font-size:20px;line-height:1.3;margin-top:1.2em}
+  .rik__flate ul,.rik__flate ol{padding-left:1.5em}
+  .rik__flate li+li{margin-top:.3em}
+  .rik__flate a{color:var(--a)}
   .bilde{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
   .bilde img{width:160px;height:160px;object-fit:cover;border-radius:12px;background:var(--hvit)}
   .utsnitt{display:grid;gap:10px;max-width:480px;margin-top:18px}

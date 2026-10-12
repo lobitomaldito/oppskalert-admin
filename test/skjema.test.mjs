@@ -83,9 +83,9 @@ test('samling.js legger hvit bunn under bildet foer det blir jpg', () => {
   assert.match(side, /ctx\.fillStyle = '#fff';\s*ctx\.fillRect\(0, 0, c\.width, c\.height\);\s*ctx\.drawImage\(kilde/);
 });
 
-test('samling.js setter aldri innleggstekst med innerHTML', () => {
+test('samling.js setter aldri innleggstekst med innerHTML uten aa rense den', () => {
   const bruk = side.match(/innerHTML\s*=\s*[^;]+;/g) || [];
-  assert.deepEqual([...new Set(bruk)], ["innerHTML = '';"]);
+  for (const b of new Set(bruk)) assert.match(b, /^innerHTML = ('';|rensHtml\()/, b);
 });
 
 test('Cmd/Ctrl+Z i edit.js lar INPUT og TEXTAREA beholde nettleserens tekst-angre', () => {
@@ -102,4 +102,51 @@ test('skjema.js, samling.js og samling.html havner i dist/admin etter et bygg', 
   writeFileSync(join(rot, 'templates', 'index.html'), '<html><body><h1>Hei</h1></body></html>');
   build({ rot });
   for (const f of ['skjema.js', 'samling.js', 'samling.html']) assert.ok(existsSync(join(rot, 'dist', 'admin', f)), f);
+});
+
+test('rensHtml: avsnitt fra tekstTilHtml kommer uendret tilbake', () => {
+  const { rensHtml, tekstTilHtml } = hjelpere();
+  const html = tekstTilHtml('Første avsnitt\nmed linjeskift.\n\nAndre & siste.');
+  assert.equal(rensHtml(html), html);
+});
+
+test('rensHtml: formateringen editoren tilbyr overlever', () => {
+  const { rensHtml } = hjelpere();
+  const html = '<h2>Mellomtittel</h2><p><strong>Fet</strong> og <em>kursiv</em></p><ul><li>En</li><li>To</li></ul><ol><li>Tre</li></ol>';
+  assert.equal(rensHtml(html), html);
+});
+
+test('rensHtml: Word-lim blir rene avsnitt', () => {
+  const { rensHtml } = hjelpere();
+  const word = '<!--[if gte mso 9]><xml><o:x>1</o:x></xml><![endif]--><style>p{color:red}</style>' +
+    '<p class="MsoNormal" style="margin:0"><span lang="NO-BOK"><b>Fet</b> tekst<o:p></o:p></span></p>' +
+    '<p class="MsoNormal"><o:p>&nbsp;</o:p></p><h1 style="x">Stor</h1><h4>Liten</h4>';
+  assert.equal(rensHtml(word), '<p><strong>Fet</strong> tekst</p><h2>Stor</h2><h3>Liten</h3>');
+});
+
+test('rensHtml: skript, bilder, hendelser og farlige lenker forsvinner', () => {
+  const { rensHtml } = hjelpere();
+  assert.equal(rensHtml('<p onclick="x()">a<script>alert(1)</script><img src=x onerror=alert(1)></p>'), '<p>a</p>');
+  assert.equal(rensHtml('<p><a href="javascript:alert(1)">x</a></p>'), '<p>x</p>');
+  assert.equal(rensHtml('<p><a href="https://lovdata.no/a?b=1&amp;c=2" style="x">Lovdata</a></p>'),
+    '<p><a href="https://lovdata.no/a?b=1&amp;c=2" target="_blank" rel="noopener">Lovdata</a></p>');
+  assert.equal(rensHtml('<p><a href="mailto:post@lin.no">post</a></p>'), '<p><a href="mailto:post@lin.no">post</a></p>');
+});
+
+test('rensHtml: loes tekst og div-linjer blir avsnitt, tomme avsnitt fjernes', () => {
+  const { rensHtml } = hjelpere();
+  assert.equal(rensHtml('Linje en<div>Linje to</div><div><br></div><p> </p>'), '<p>Linje en</p><p>Linje to</p>');
+});
+
+test('rensHtml: lister uten ul, avsnitt i punkter og nestede lister', () => {
+  const { rensHtml } = hjelpere();
+  assert.equal(rensHtml('<li>Alene</li>'), '<ul><li>Alene</li></ul>');
+  assert.equal(rensHtml('<ol><li><p>En</p></li><li>To<ul><li>Under</li></ul></li></ol><p>Etter</p>'),
+    '<ol><li>En</li><li>To</li><li>Under</li></ol><p>Etter</p>');
+});
+
+test('rensHtml: ulukkede og feilnestede inline-merker lukkes ved avsnittsslutt', () => {
+  const { rensHtml } = hjelpere();
+  assert.equal(rensHtml('<p><strong>fet <em>begge</strong> slutt</p>'), '<p><strong>fet <em>begge</em></strong> slutt</p>');
+  assert.equal(rensHtml('<p>a < b</p>'), '<p>a &lt; b</p>');
 });
