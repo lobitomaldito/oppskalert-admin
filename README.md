@@ -251,7 +251,10 @@ To detaljer verdt å kjenne:
 **Fokuspunkt.** Nøkkelen `nokkel@pos` styrer utsnittet i et beskåret bilde, for
 eksempel `"50% 22%"`. Den settes som `object-position` på en `<img>` og
 `background-position` ellers. Uten den beholder nettleseren midten og kutter
-gjerne hoder.
+gjerne hoder. Samlinger har det samme: `bilde@pos` paa innlegget gjelder kortet
+paa foreldresiden, toppbildet paa innleggssiden og de relaterte kortene. Det
+settes i skjemaet (trykk paa det som skal synes) eller ved aa dra bildet paa et
+kort i redigeringsmodus, som lagrer rett i innlegget med handlingen `utsnitt`.
 
 **Speiling.** Et blokk med `data-content-src` er skrivebeskyttet i editoren, slik
 at speilet innhold har én eier. Endringen gjøres på siden som eier innholdet, og

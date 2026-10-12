@@ -258,8 +258,10 @@
       if (!p._kladd) knapper.push(el('a', { klasse: 'knapp', href: '/' + navn + '/' + p.slug + '/', target: '_blank', tekst: 'Se på nettsiden' }));
       var bildeFelt = feltAvType('bilde');
       var url = bildeFelt && p[bildeFelt.navn];
+      var miniatyr = url ? el('img', { src: url, alt: '' }) : el('div', { klasse: 'tom' });
+      if (url && p[bildeFelt.navn + '@pos']) miniatyr.style.objectPosition = p[bildeFelt.navn + '@pos'];
       return el('li', { klasse: 'rad' }, [
-        url ? el('img', { src: url, alt: '' }) : el('div', { klasse: 'tom' }),
+        miniatyr,
         el('div', {}, [
           el('h2', {}, [tittelAv(p), p._kladd ? el('span', { klasse: 'merke', tekst: 'Skjult' }) : null]),
           sammendrag.length ? el('p', { tekst: sammendrag.join(' · ') }) : null,
@@ -358,6 +360,77 @@
 
   function bildeSrc(url) { return ventende[url] || url; }
 
+  // Utsnitt: hun trykker paa det som alltid skal synes (ansiktene), og punktet
+  // lagres som <felt>@pos, f.eks. "50% 20%". Bygget setter det som
+  // object-position, som legger nettopp det punktet i bildet paa samme sted i
+  // rammen, saa det synes uansett form: kvadratisk kort, bredt toppbilde.
+  // Forhaandsvisningene viser de to ytterpunktene.
+  function lagUtsnitt(utkast, felt, kvadrat) {
+    var nokkel = felt + '@pos';
+    var hel = el('img', { alt: '', draggable: false });
+    var prikk = el('span', { klasse: 'utsnitt__prikk', 'aria-hidden': 'true' });
+    var flate = el('div', { klasse: 'utsnitt__hel', tabIndex: 0,
+      'aria-label': 'Velg utsnitt. Piltastene flytter punktet.' }, [hel, prikk]);
+    var bred = el('img', { alt: '', klasse: 'utsnitt__bred' });
+    var midt = el('button', { klasse: 'knapp', type: 'button', tekst: 'Midtstill' });
+    var boks = el('div', { klasse: 'utsnitt' }, [
+      el('small', { tekst: 'Trykk på det som alltid skal synes, for eksempel ansiktene. Bildet beskjæres ulikt på forsiden og på egen side, men punktet du velger, er alltid med.' }),
+      flate,
+      el('small', { tekst: 'Slik blir det i bredt format:' }),
+      bred,
+      midt
+    ]);
+
+    function punkt() {
+      var m = /^([\d.]+)% ([\d.]+)%$/.exec(utkast[nokkel] || '');
+      return m ? [parseFloat(m[1]), parseFloat(m[2])] : [50, 50];
+    }
+    function tegn() {
+      var url = utkast[felt];
+      boks.hidden = !url;
+      if (!url) return;
+      hel.src = bred.src = bildeSrc(url);
+      var p = punkt();
+      prikk.style.left = p[0] + '%';
+      prikk.style.top = p[1] + '%';
+      bred.style.objectPosition = kvadrat.style.objectPosition = p[0] + '% ' + p[1] + '%';
+    }
+    function sett(x, y) {
+      x = Math.max(0, Math.min(100, Math.round(x)));
+      y = Math.max(0, Math.min(100, Math.round(y)));
+      utkast[nokkel] = x + '% ' + y + '%';
+      tegn();
+    }
+    function fraPeker(e) {
+      var r = hel.getBoundingClientRect();
+      if (r.width && r.height) sett((e.clientX - r.left) / r.width * 100, (e.clientY - r.top) / r.height * 100);
+    }
+
+    var drar = false;
+    flate.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      drar = true;
+      try { flate.setPointerCapture(e.pointerId); } catch (x) {}
+      fraPeker(e);
+    });
+    flate.addEventListener('pointermove', function (e) { if (drar) fraPeker(e); });
+    flate.addEventListener('pointerup', function () { drar = false; });
+    flate.addEventListener('pointercancel', function () { drar = false; });
+    flate.addEventListener('keydown', function (e) {
+      var p = punkt(), steg = e.shiftKey ? 10 : 2;
+      if (e.key === 'ArrowLeft') sett(p[0] - steg, p[1]);
+      else if (e.key === 'ArrowRight') sett(p[0] + steg, p[1]);
+      else if (e.key === 'ArrowUp') sett(p[0], p[1] - steg);
+      else if (e.key === 'ArrowDown') sett(p[0], p[1] + steg);
+      else return;
+      e.preventDefault();
+    });
+    midt.addEventListener('click', function () { delete utkast[nokkel]; tegn(); });
+
+    tegn();
+    return { el: boks, tegn: tegn };
+  }
+
   // -------------------------------------------------------
   //  SKJEMA
   // -------------------------------------------------------
@@ -401,19 +474,23 @@
         var forh = el('img', { alt: '', hidden: !utkast[f.navn] });
         if (utkast[f.navn]) forh.src = bildeSrc(utkast[f.navn]);
         var knapp = el('button', { klasse: 'knapp', type: 'button', tekst: utkast[f.navn] ? 'Bytt bilde' : 'Velg bilde' });
+        var utsnitt = lagUtsnitt(utkast, f.navn, forh);
         var fil = velger(false, function (filer) {
           melding('Gjør klar bildet …');
           nyttBilde(filer[0], function (feil, url) {
             if (feil) { melding('✗ Klarte ikke å lese bildet. Prøv et jpg- eller png-bilde.', 'feil'); return; }
             utkast[f.navn] = url;
+            // Punktet hoerte til det gamle bildet.
+            delete utkast[f.navn + '@pos'];
             forh.src = bildeSrc(url);
             forh.hidden = false;
             knapp.textContent = 'Bytt bilde';
+            utsnitt.tegn();
             melding('✓ Bildet er klart. Det lastes opp når du trykker Publiser.', 'ok');
           });
         });
         knapp.addEventListener('click', function () { fil.click(); });
-        return el('div', { klasse: 'felt' }, [el('span', { tekst: f.etikett }), hjelp, el('div', { klasse: 'bilde' }, [forh, knapp, fil])]);
+        return el('div', { klasse: 'felt' }, [el('span', { tekst: f.etikett }), hjelp, el('div', { klasse: 'bilde' }, [forh, knapp, fil]), utsnitt.el]);
       }
 
       if (f.type === 'galleri') {

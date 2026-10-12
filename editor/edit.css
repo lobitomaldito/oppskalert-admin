@@ -157,6 +157,10 @@ body.adm-editing .dm__media:has(.adm-posing)::after { display: none; }
   padding: 6px 12px; border-radius: 100px; white-space: nowrap; z-index: 5;
 }
 
+/* En samling: teksten redigeres i innlegget, men bildene kan faa nytt utsnitt her. */
+.adm-readonly[data-content-src^="samling:"]::before { content: '🔒 Tekst redigeres i innlegget · trykk på et bilde for å flytte utsnitt'; }
+body.adm-editing [data-samling-post] img { cursor: pointer; }
+
 /* List editing: delete button on each item */
 .adm-list__del {
   position: absolute; top: 8px; right: 8px; z-index: 10;

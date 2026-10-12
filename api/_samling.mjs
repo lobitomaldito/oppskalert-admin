@@ -1,4 +1,5 @@
 import { slugErGyldig, unikSlug } from '../build/samling.mjs';
+import { posErGyldig } from '../build/bake.mjs';
 
 // Samlinger lagres kumulativt: to publiseringer i samme byggevindu skal ikke
 // overskrive hverandre, slik hovedinnholdet gjor med {...naa, ...edits}.
@@ -25,6 +26,10 @@ const feil = (status, melding) => ({ feil: { status, melding } });
 //   ny        nytt innlegg; en slug som finnes fra foer faar -2, -3 (aldri overskriving)
 //   oppdater  bytter ut innlegget med samme slug, som maa finnes
 //   slett     fjerner innlegget med samling.slug
+//   utsnitt   setter <samling.felt>@pos = samling.pos paa innlegget med
+//             samling.slug, og roerer ingenting annet. Brukes naar utsnittet
+//             dras paa plass rett paa nettsiden (editor/edit.js), som ikke har
+//             hele innlegget og ikke skal overskrive det.
 //   les       gir tabellen tilbake uten aa skrive noe
 // Svarer { liste, skriv, slug } eller { feil: { status, melding } }.
 export function behandle(naavaerende, samling) {
@@ -38,6 +43,15 @@ export function behandle(naavaerende, samling) {
     if (!slugErGyldig(samling.slug)) return feil(400, 'Ugyldig slug på innlegget.');
     if (!finnes(samling.slug)) return feil(404, 'Fant ikke innlegget. Det kan allerede være slettet.');
     return { liste: liste.filter((i) => !i || i.slug !== samling.slug), skriv: true, slug: samling.slug };
+  }
+
+  if (handling === 'utsnitt') {
+    if (!slugErGyldig(samling.slug)) return feil(400, 'Ugyldig slug på innlegget.');
+    if (typeof samling.felt !== 'string' || !/^[a-z0-9_-]+$/i.test(samling.felt)) return feil(400, 'Ugyldig bildefelt.');
+    if (!posErGyldig(samling.pos)) return feil(400, 'Ugyldig utsnitt.');
+    const gammel = liste.find((i) => i && i.slug === samling.slug);
+    if (!gammel) return feil(404, 'Fant ikke innlegget. Det kan være slettet.');
+    return { liste: flett(liste, { ...gammel, [`${samling.felt}@pos`]: samling.pos }), skriv: true, slug: samling.slug };
   }
 
   const innlegg = samling.innlegg;

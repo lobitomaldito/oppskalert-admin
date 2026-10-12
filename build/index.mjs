@@ -5,7 +5,7 @@ import { join, isAbsolute, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'node-html-parser';
 import { lagOppslag } from './mirror.mjs';
-import { bakeTekst, bakeBilder, bakeLister, settStilProp } from './bake.mjs';
+import { bakeTekst, bakeBilder, bakeLister, settStilProp, settFokuspunkt } from './bake.mjs';
 import { lesSamlinger, synlige, slugErGyldig } from './samling.mjs';
 import { bakInnleggside, lagSkjema, renTekst } from './innleggside.mjs';
 
@@ -47,14 +47,17 @@ function sorterte(liste) {
 // Laasen dekker HELE beholderen, saa et [data-samling]-element skal ikke
 // inneholde egne data-edit/data-edit-image utenom listemalen (se README).
 //
+// Hvert kort faar data-samling-post="navn/slug", saa editor/edit.js vet
+// hvilket innlegg et utsnitt som dras paa plass her, skal lagres i.
+//
 // BEVISSTE FORSKJELLER fra bakeLister() i build/bake.mjs. Endres bakeLister,
 // er dette de tre stedene som IKKE foelger med av seg selv:
 //   1. Mal-valg: bakeLister rendrer post i fra malStrenger[i], saa et
 //      framhevet kort 2 beholder formen sin. bakSamlinger bruker alltid den
 //      foerste malen, fordi antall innlegg i en samling er ukjent og vokser.
-//   2. Fokuspunkt: bakeLister leser felt@pos og felt@pos-modal og kaller
-//      settFokuspunkt. Samlinger har ingen utsnitts-UI enda, saa ingen slike
-//      verdier finnes aa lese.
+//   2. Fokuspunkt: begge leser felt@pos. Bare bakeLister leser
+//      felt@pos-modal: samlinger har ingen "Les mer"-modal, innlegget har sin
+//      egen side, og den bruker felt@pos (se fyllInnlegg i innleggside.mjs).
 //   3. _skjult: bakeLister legger paa .is-hidden-item. Samlinger skjuler med
 //      _kladd i stedet, og et utkast bygges aldri (se synlige() i
 //      build/samling.mjs). De to er ulike mekanismer med vilje.
@@ -117,7 +120,9 @@ function bakSamlinger(dom, samlinger) {
         } else {
           settStilProp(felt, 'background-image', `url('${post[k]}')`);
         }
+        settFokuspunkt(felt, post[`${k}@pos`]);
       }
+      element.setAttribute('data-samling-post', `${navn}/${post.slug}`);
 
       for (const lenke of element.querySelectorAll('[data-samling-lenke]')) {
         lenke.setAttribute('href', `/${navn}/${post.slug}/`);

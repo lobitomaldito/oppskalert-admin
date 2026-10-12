@@ -705,7 +705,48 @@
   // Persistence: a keyed image saves as "<key>@pos" (see build.mjs); an image inside
   // rich content (a gallery in a "Les mer") already saves its inline style with the
   // surrounding HTML, so nothing extra is needed there.
-  var posEl = null, posBar = null, posDrag = null;
+  var posEl = null, posBar = null, posDrag = null, posStart = '';
+
+  // Et bilde i en samling (kortene for arrangementer, blogginnlegg, varer) eies
+  // av innlegget, ikke av denne siden, og Publiser roerer det ikke. Utsnittet
+  // lagres derfor rett i innlegget naar posisjoneringen avsluttes, med
+  // handlingen "utsnitt" (api/_samling.mjs). Bygget merker kortet med
+  // data-samling-post="navn/slug".
+  function samlingsBilde(el) {
+    if (!el || el.tagName !== 'IMG' || !el.closest) return null;
+    var felt = el.getAttribute('data-list-image-field') || el.getAttribute('data-innlegg-image');
+    var kort = el.closest('[data-samling-post]');
+    if (!felt || !kort) return null;
+    var d = kort.getAttribute('data-samling-post').split('/');
+    return d.length === 2 ? { navn: d[0], slug: d[1], felt: felt } : null;
+  }
+  function posTekst(el, tekst) {
+    return tekst + (samlingsBilde(el) ? ' – lagres når du trykker Ferdig' : ' – husk å Publisere');
+  }
+  function lagreSamlingsUtsnitt(info, pos) {
+    status.textContent = 'Lagrer utsnittet …';
+    fetch('/api/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: currentPin(), samling: { navn: info.navn, handling: 'utsnitt', slug: info.slug, felt: info.felt, pos: pos } })
+    }).then(function (r) {
+      return r.text().then(function (t) {
+        var j = {};
+        try { j = JSON.parse(t) || {}; } catch (e) {}
+        return { ok: r.ok && j.ok === true, status: r.status, j: j };
+      });
+    }, function () {
+      return { ok: false, status: 0, j: { error: 'Fikk ikke kontakt. Sjekk nettet og prøv igjen.' } };
+    }).then(function (res) {
+      if (res.ok) {
+        var sek = Math.round((res.j.rebuildMs || 50000) / 1000);
+        status.textContent = '✓ Utsnittet er lagret. ' + (sek > 1 ? 'Nettsiden er oppdatert om ca. ' + sek + ' sekunder.' : 'Nettsiden er oppdatert.');
+      } else if (res.status === 401) {
+        status.textContent = '✗ Utsnittet ble ikke lagret: feil PIN. Logg ut og inn igjen.';
+      } else {
+        status.textContent = '✗ Utsnittet ble ikke lagret: ' + (res.j.error || 'serveren svarte ' + res.status);
+      }
+    });
+  }
 
   // Pixels of image hidden outside the box, per axis, also the drag distance that
   // moves the crop from one edge to the other, so dragging tracks the finger 1:1.
@@ -760,6 +801,7 @@
     endPosMode();
     pushUndo();                    // one snapshot covers the whole reposition
     posEl = el;
+    posStart = savedPos(el);
     el.classList.add('adm-posing');
     el.addEventListener('pointerdown', onPosDown);
     showPosBar(el);
@@ -767,6 +809,11 @@
   }
   function endPosMode() {
     if (!posEl) return;
+    // Hver vei ut av posisjoneringen (Ferdig, Esc, et klikk et annet sted,
+    // Avslutt) lagrer et endret samlingsbilde, saa det aldri blir staaende et
+    // utsnitt paa skjermen som ikke finnes i innlegget.
+    var info = samlingsBilde(posEl), pos = savedPos(posEl);
+    if (info && pos && pos !== posStart) lagreSamlingsUtsnitt(info, pos);
     posEl.classList.remove('adm-posing', 'is-dragging');
     posEl.removeEventListener('pointerdown', onPosDown);
     posEl = null; posDrag = null;
@@ -802,7 +849,7 @@
     posEl.removeEventListener('pointerup', onPosUp);
     posEl.removeEventListener('pointercancel', onPosUp);
     try { posEl.releasePointerCapture(e.pointerId); } catch (x) {}
-    status.textContent = '✓ Utsnitt endret – husk å Publisere';
+    status.textContent = posTekst(posEl, '✓ Utsnitt endret');
   }
 
   function showPosBar(el) {
@@ -820,10 +867,10 @@
         e.preventDefault(); e.stopPropagation();
         if (b.getAttribute('data-pa') === 'center') {
           writePos(posEl, 50, 50);
-          status.textContent = '✓ Midtstilt – husk å Publisere';
+          status.textContent = posTekst(posEl, '✓ Midtstilt');
         } else {
+          if (!samlingsBilde(posEl)) status.textContent = '✓ Utsnitt satt – husk å Publisere';
           endPosMode();
-          status.textContent = '✓ Utsnitt satt – husk å Publisere';
         }
       });
     }
@@ -842,7 +889,7 @@
     else if (e.key === 'ArrowRight') writePos(posEl, p.x - step, p.y);
     else return;
     e.preventDefault();
-    status.textContent = '✓ Utsnitt endret – husk å Publisere';
+    status.textContent = posTekst(posEl, '✓ Utsnitt endret');
   });
 
   // -------------------------------------------------------
@@ -935,7 +982,12 @@
     if (!editing) return;
     if (imgMenu.contains(e.target)) return;            // the menu handles its own clicks
     if (posBar && posBar.contains(e.target)) return;   // ditto the positioning bar
-    if (posEl && posEl === e.target) return;           // a click on the image being dragged
+    if (posEl && posEl === e.target) {                 // a click on the image being dragged
+      // Et samlingskort er en lenke. Klikket som avslutter en dragning skal
+      // ikke ta henne bort fra siden.
+      if (samlingsBilde(posEl)) { e.preventDefault(); e.stopPropagation(); }
+      return;
+    }
     // Et kort i en samling lenker til innleggets egen side. Under redigering
     // skal et trykk der ikke navigere bort fra endringer som ikke er publisert.
     if (e.target.closest && e.target.closest('[data-samling-lenke]')) e.preventDefault();
@@ -949,6 +1001,16 @@
       hideImgMenu();
       if (canReposition(img)) startPosMode(img);
       else status.textContent = 'Dette bildet er ikke beskåret – ingenting å flytte på';
+      return;
+    }
+    // Et bilde paa et samlingskort: teksten redigeres i innlegget, men utsnittet
+    // kan dras paa plass her og lagres rett i innlegget (se samlingsBilde).
+    if (samlingsBilde(img)) {
+      e.preventDefault();
+      e.stopPropagation();
+      hideImgMenu();
+      if (canReposition(img)) startPosMode(img);
+      else status.textContent = 'Hele bildet vises her. Utsnittet på innleggets egen side velger du under Rediger der.';
       return;
     }
     if (img && img.tagName === 'IMG' &&

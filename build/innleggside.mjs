@@ -8,7 +8,7 @@
 //   data-innlegg-galleri="felt"  en liste bilder, ett <img> per adresse
 // og de samme merkene forteller redigeringssiden hvilke felt skjemaet skal ha.
 import { parse } from 'node-html-parser';
-import { settStilProp } from './bake.mjs';
+import { settStilProp, settFokuspunkt } from './bake.mjs';
 
 const ENTITETER = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'", nbsp: ' ' };
 
@@ -46,16 +46,21 @@ export function fyllInnlegg(rot, post) {
     }
   }
   for (const el of rot.querySelectorAll('[data-innlegg-image]')) {
-    const url = post[el.getAttribute('data-innlegg-image')];
+    const felt = el.getAttribute('data-innlegg-image');
+    const url = post[felt];
     if (url == null) continue;
     if (el.tagName === 'IMG') {
       el.setAttribute('src', url);
       if (post.tittel) el.setAttribute('alt', renTekst(post.tittel));
     } else if (el.tagName === 'META') {
       el.setAttribute('content', url);
+      continue;
     } else {
       settStilProp(el, 'background-image', `url('${url}')`);
     }
+    // Ett punkt per bilde, samme som paa kortene: toppbildet og kortene er
+    // beskaaret til ulike former, men punktet som skal synes, er det samme.
+    settFokuspunkt(el, post[`${felt}@pos`]);
   }
   for (const el of rot.querySelectorAll('[data-innlegg-galleri]')) {
     const liste = post[el.getAttribute('data-innlegg-galleri')];
@@ -103,7 +108,9 @@ export function bakInnleggside(dom, poster, i, navn) {
       const kort = parse(malStreng);
       fyllInnlegg(kort, p);
       for (const a of kort.querySelectorAll('[data-samling-lenke]')) a.setAttribute('href', `/${navn}/${p.slug}/`);
-      forelder.appendChild(kort.querySelector('[data-relatert]'));
+      const el = kort.querySelector('[data-relatert]');
+      el.setAttribute('data-samling-post', `${navn}/${p.slug}`);
+      forelder.appendChild(el);
     }
   }
 

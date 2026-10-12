@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     // Innholdet valideres ferdig i behandle(), men det som kan avvises uten
     // GitHub, avvises her, foer noe er lest.
     const handling = samling.handling || 'ny';
-    if (!['ny', 'oppdater', 'slett', 'les'].includes(handling)) {
+    if (!['ny', 'oppdater', 'slett', 'les', 'utsnitt'].includes(handling)) {
       return res.status(400).json({ ok: false, error: 'Ukjent handling.' });
     }
     const innlegg = samling.innlegg;
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
         (!innlegg || typeof innlegg !== 'object' || Array.isArray(innlegg) || !slugErGyldig(innlegg.slug))) {
       return res.status(400).json({ ok: false, error: 'Ugyldig slug på innlegget.' });
     }
-    if (handling === 'slett' && !slugErGyldig(samling.slug)) {
+    if ((handling === 'slett' || handling === 'utsnitt') && !slugErGyldig(samling.slug)) {
       return res.status(400).json({ ok: false, error: 'Ugyldig slug på innlegget.' });
     }
     samlingSti = `content/samlinger/${samlingNavn}.json`;
@@ -149,7 +149,7 @@ export default async function handler(req, res) {
       filer.push({ sti: samlingSti, innhold: JSON.stringify(resultat.liste, null, 2) });
     }
 
-    const HANDLING = { ny: 'nytt innlegg', oppdater: 'endret', slett: 'slettet' };
+    const HANDLING = { ny: 'nytt innlegg', oppdater: 'endret', slett: 'slettet', utsnitt: 'nytt utsnitt paa' };
     const { sha } = await commitFiler({
       repo, branch, token,
       melding: resultat

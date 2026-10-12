@@ -45,6 +45,14 @@
   .valg label:has(input:checked){border-color:var(--a)}
   .bilde{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
   .bilde img{width:160px;height:160px;object-fit:cover;border-radius:12px;background:var(--hvit)}
+  .utsnitt{display:grid;gap:10px;max-width:480px;margin-top:18px}
+  .utsnitt[hidden]{display:none}
+  .utsnitt small{margin:0}
+  .utsnitt .knapp{justify-self:start}
+  .utsnitt__hel{position:relative;justify-self:start;max-width:100%;line-height:0;border-radius:12px;overflow:hidden;cursor:crosshair;touch-action:none;user-select:none;-webkit-user-select:none}
+  .utsnitt__hel img{display:block;max-width:100%;max-height:min(360px,60vh);width:auto;height:auto;pointer-events:none}
+  .utsnitt__prikk{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.55),0 2px 10px rgba(0,0,0,.4);pointer-events:none}
+  .utsnitt__bred{width:100%;aspect-ratio:21/9;object-fit:cover;border-radius:12px;display:block;background:var(--hvit)}
   .galleri{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin-bottom:12px}
   .galleri figure{position:relative}
   .galleri img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:10px;display:block}

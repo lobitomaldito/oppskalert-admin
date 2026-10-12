@@ -11,9 +11,13 @@ export function settStilProp(el, prop, verdi) {
 }
 
 // "50% 22%" styrer hva som vises i et beskaaret bilde. Uten den beholder
-// nettleseren midten, og kutter gjerne hoder.
+// nettleseren midten, og kutter gjerne hoder. Verdien skrives rett inn i et
+// style-attributt, saa alt annet enn to prosenttall avvises.
+const POS = /^\d{1,3}(\.\d+)?% \d{1,3}(\.\d+)?%$/;
+export function posErGyldig(pos) { return typeof pos === 'string' && POS.test(pos); }
+
 export function settFokuspunkt(el, pos) {
-  if (!pos) return;
+  if (!posErGyldig(pos)) return;
   settStilProp(el, el.tagName === 'IMG' ? 'object-position' : 'background-position', pos);
 }
 
