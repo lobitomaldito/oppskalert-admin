@@ -107,10 +107,17 @@ Et prosjekt får en rettelse først når avhengigheten peker på den nye taggen.
 Bytt taggen og installer på nytt, kjør så `doctor` og bygget:
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.5.4"
+npm i "github:lobitomaldito/oppskalert-admin#v1.5.5"
 npx oppskalert-admin doctor .
 node build.mjs
 ```
+
+**v1.5.5:** `doctor` feiler når et element har både `data-edit` og en
+`data-tone-N`. Design Lab fra `/quick-demo` kjører `settTone('1')` ved hver
+sidelasting, og leser den tone 1 fra `data-tone-1`, ser besøkende den gamle
+demoteksten i stedet for det kunden har lagret. Feilen forsvinner når skriptet
+leser tone 1 fra elementets egen tekst (`el.__t1 = el.textContent`), eller når
+`data-tone-*` fjernes fra redigerbare elementer.
 
 **v1.5.4:** lange tekstfelt på redigeringssiden (`data-innlegg` på `div`,
 `section`, `article`) er formaterte felt i stedet for et vanlig tekstfelt:

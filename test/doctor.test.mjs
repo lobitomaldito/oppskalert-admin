@@ -15,6 +15,7 @@ import dodeLenker from '../doctor/regler/dode-lenker.mjs';
 import sidehode from '../doctor/regler/sidehode.mjs';
 import sidestruktur from '../doctor/regler/sidestruktur.mjs';
 import hardkodetArstall from '../doctor/regler/hardkodet-arstall.mjs';
+import toneOgEdit from '../doctor/regler/tone-og-edit.mjs';
 
 const p = (filer) => ({ rot: '/x', filer });
 
@@ -291,4 +292,14 @@ test('kjor skiller feil fra varsler', () => {
   );
   assert.equal(res.feil.length, 1);
   assert.equal(res.varsler.length, 1);
+});
+
+test('data-edit med data-tone-N er en feil, med mindre skriptet leser tone 1 fra teksten', () => {
+  const mal = { sti: 'templates/index.html', tekst: '<h1 data-edit="index.tittel" data-tone-1="Gammel" data-tone-2="Ny">Lagret</h1>' };
+  const funn = toneOgEdit.sjekk(p([mal, { sti: 'static/js/main.js', tekst: "el.textContent = el.getAttribute('data-tone-' + v);" }]));
+  assert.equal(funn.length, 1);
+  assert.match(funn[0].melding, /Design Lab/);
+  const rettet = "if (el.__t1 == null) el.__t1 = el.textContent;\nvar t = v === '1' ? el.__t1 : el.getAttribute('data-tone-' + v);";
+  assert.deepEqual(toneOgEdit.sjekk(p([mal, { sti: 'static/js/main.js', tekst: rettet }])), []);
+  assert.deepEqual(toneOgEdit.sjekk(p([{ sti: 'templates/a.html', tekst: '<p data-tone-1="x">x</p><p data-edit="a.b">y</p>' }])), []);
 });
