@@ -70,7 +70,13 @@
     var entered = prompt('Admin-PIN:');
     if (!entered) return;
     verifyPin(entered).then(function (res) {
-      if (res.ok) { sessionStorage.setItem('admin_pin', entered); location.reload(); }
+      if (res.ok) {
+        sessionStorage.setItem('admin_pin', entered);
+        // Rett inn i redigering etter innlogging. Kunden (GTI, 22.10.2026)
+        // skjonte ikke at «Rediger» maatte trykkes etter PIN-en.
+        sessionStorage.setItem('adm_rett_i_redigering', '1');
+        location.reload();
+      }
       else alert(res.error || 'Feil PIN');
     });
   }
@@ -1199,5 +1205,9 @@
   // saa en besoekende uten admin ser ingenting av det.
   window.oppskalertAdmin = { prepImage: prepImage, bar: bar, status: status };
   document.dispatchEvent(new Event('adm:klar'));
+  if (sessionStorage.getItem('adm_rett_i_redigering')) {
+    sessionStorage.removeItem('adm_rett_i_redigering');
+    setEditing(true);
+  }
   } // end initEditor
 })();
