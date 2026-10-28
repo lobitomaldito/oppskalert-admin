@@ -83,6 +83,11 @@ test('samling.js legger hvit bunn under bildet foer det blir jpg', () => {
   assert.match(side, /ctx\.fillStyle = '#fff';\s*ctx\.fillRect\(0, 0, c\.width, c\.height\);\s*ctx\.drawImage\(kilde/);
 });
 
+test('samling.js: hurtigknappen i lista bare med noeyaktig to valg, aldri for en kategori', () => {
+  assert.match(side, /valgFelt && valgFelt\.valg\.length === 2\)/);
+  assert.equal(/valgFelt\.valg\.length >= 2/.test(side), false);
+});
+
 test('samling.js setter aldri innleggstekst med innerHTML uten aa rense den', () => {
   const bruk = side.match(/innerHTML\s*=\s*[^;]+;/g) || [];
   for (const b of new Set(bruk)) assert.match(b, /^innerHTML = ('';|rensHtml\()/, b);

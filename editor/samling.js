@@ -355,7 +355,9 @@
         if ((f.type === 'valg' || f.navn === 'pris') && p[f.navn]) sammendrag.push(htmlTilTekst(p[f.navn]));
       });
       var knapper = [el('button', { klasse: 'knapp', type: 'button', tekst: 'Rediger', paa: { click: function () { visSkjema(p); } } })];
-      if (valgFelt && valgFelt.valg.length >= 2) {
+      // Hurtigknappen er for statusbytte (Til salgs|Solgt). Med flere valg er
+      // feltet en kategori, og ett trykk ville flyttet innlegget.
+      if (valgFelt && valgFelt.valg.length === 2) {
         var naa = htmlTilTekst(p[valgFelt.navn]);
         var annen = naa === valgFelt.valg[0] ? valgFelt.valg[1] : valgFelt.valg[0];
         knapper.push(el('button', { klasse: 'knapp', type: 'button',

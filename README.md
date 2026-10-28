@@ -107,10 +107,15 @@ Et prosjekt får en rettelse først når avhengigheten peker på den nye taggen.
 Bytt taggen og installer på nytt, kjør så `doctor` og bygget:
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.5.5"
+npm i "github:lobitomaldito/oppskalert-admin#v1.5.7"
 npx oppskalert-admin doctor .
 node build.mjs
 ```
+
+**v1.5.7:** hurtigknappen «Merk som …» i lista på `/admin/samling` vises bare
+når `data-innlegg-valg` har nøyaktig to valg (Til salgs|Solgt). Med tre eller
+flere er feltet en kategori, og knappen flyttet innlegget til en annen kategori
+med ett trykk. Kategorien endres nå bare i skjemaet.
 
 **v1.5.5:** `doctor` feiler når et element har både `data-edit` og en
 `data-tone-N`. Design Lab fra `/quick-demo` kjører `settTone('1')` ved hver
@@ -498,7 +503,7 @@ ett felt:
 | `data-innlegg` på `p`, `blockquote` | kort tekst |
 | `data-innlegg` på `div`, `section`, `article` | formatert tekst: mellomtittel, fet, kursiv, lister og lenker |
 | `data-innlegg-type="linje\|kort\|lang"` | overstyrer typen over |
-| `data-innlegg-valg="Til salgs\|Solgt"` | valgknapper; lista får en hurtigknapp som bytter mellom de to første |
+| `data-innlegg-valg="Til salgs\|Solgt"` | valgknapper; med nøyaktig to valg får lista en hurtigknapp som bytter mellom dem |
 | `data-innlegg-image="felt"` | ett bilde |
 | `data-innlegg-galleri="felt"` | inntil 8 bilder; bygget skriver ett `<img>` per adresse |
 | `data-innlegg-etikett="Pris"` | overskriften på feltet |
