@@ -107,10 +107,15 @@ Et prosjekt får en rettelse først når avhengigheten peker på den nye taggen.
 Bytt taggen og installer på nytt, kjør så `doctor` og bygget:
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.5.7"
+npm i "github:lobitomaldito/oppskalert-admin#v1.5.8"
 npx oppskalert-admin doctor .
 node build.mjs
 ```
+
+**v1.5.8:** knappen som skjuler et listeelement sier «Skjul» og «Vis» i stedet
+for et øye-ikon, og redigeringslinja forteller at elementet ikke vises for
+besøkende. Øyet ble lest som «forhåndsvis», og en klient skjulte sin egen profil
+uten å merke det. «Fjern» spør nå før elementet tas bort.
 
 **v1.5.7:** hurtigknappen «Merk som …» i lista på `/admin/samling` vises bare
 når `data-innlegg-valg` har nøyaktig to valg (Til salgs|Solgt). Med tre eller

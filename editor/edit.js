@@ -466,14 +466,18 @@
     function btn(act, label, title) {
       return '<button type="button" data-a="' + act + '" title="' + title + '">' + label + '</button>';
     }
-    function hideLabel() { return item.classList.contains('is-hidden-item') ? '🙈' : '👁'; }
+    // Ord, ikke oeye-ikon: et oeye leses som «forhaandsvis», og en klient skjulte
+    // sin egen profil uten aa merke det (Lin Advokater, 1.11.2026).
+    function hideLabel() { return item.classList.contains('is-hidden-item') ? 'Vis' : 'Skjul'; }
     ctrl.innerHTML = btn('up', '↑', 'Flytt opp') + btn('down', '↓', 'Flytt ned') +
                      btn('hide', hideLabel(), 'Skjul / vis') + btn('del', '×', 'Fjern');
     ctrl.addEventListener('click', function (e) {
       var b = e.target.closest('button'); if (!b) return;
       e.preventDefault(); e.stopPropagation();
-      pushUndo();
       var a = b.getAttribute('data-a');
+      if (a === 'del' && itemCount(container) > 1 &&
+          !window.confirm('Fjerne dette fra siden? Du kan angre før du publiserer.')) return;
+      pushUndo();
       if (a === 'up') {
         var p = item.previousElementSibling;
         if (p && p.hasAttribute('data-list-item')) container.insertBefore(item, p);
@@ -483,6 +487,9 @@
       } else if (a === 'hide') {
         item.classList.toggle('is-hidden-item');
         b.textContent = hideLabel();
+        status.textContent = item.classList.contains('is-hidden-item')
+          ? 'Skjult: vises ikke for besøkende. Trykk Vis for å hente det tilbake.'
+          : 'Vises igjen for besøkende.';
       } else if (a === 'del') {
         if (itemCount(container) > 1) item.remove();
         else status.textContent = 'Kan ikke fjerne det siste elementet';

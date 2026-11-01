@@ -196,6 +196,7 @@ body.adm-editing [data-samling-post] img { cursor: pointer; }
   background: color-mix(in srgb, var(--adm-flate) 86%, transparent); color: var(--adm-tekst); font-size: 15px; line-height: 1;
   display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);
 }
+.adm-list__ctrl button[data-a="hide"] { width: auto; padding: 0 8px; font: 600 12px/1 system-ui, sans-serif; }
 .adm-list__ctrl button:hover { background: var(--adm-aksent); }
 .adm-list__ctrl button[data-a="del"]:hover { background: var(--adm-fare); }
 

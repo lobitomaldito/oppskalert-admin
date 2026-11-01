@@ -67,3 +67,9 @@ test('ett bilde over grensen er for stort, mange smaa er for mange', () => {
   assert.match(koeFeil(60, 60), /^✗ For mange bilder på én gang\./);
   assert.match(js, /var feil = koeFeil\(Math\.floor\(String\(data\)\.length \* 3 \/ 4\), koeStorrelse\(\)\);/);
 });
+
+test('skjul-knappen har ord, ikke oeye-ikon, og fjerning spoer foerst', () => {
+  assert.equal(/👁|🙈/.test(js), false);
+  assert.match(js, /'Vis' : 'Skjul'/);
+  assert.match(js, /a === 'del'[^;]*window\.confirm/);
+});
