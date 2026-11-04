@@ -4,7 +4,7 @@
 //
 // Miljøvariabler:
 //   RESEND_API_KEY, AVSENDER_EPOST  delt i Vercel-teamet, samme for alle sider
-//   KONTAKT_EPOST                   kundens adresse, per prosjekt
+//   KONTAKT_EPOST                   kundens adresse, per prosjekt. Flere skilles med komma
 //   SIDENAVN                        valgfri, navnet i Fra-feltet (ellers domenet)
 //
 // Feltene: navn, og e-post eller telefon, er påkrevd. melding står sist i
@@ -70,7 +70,8 @@ export default async function handler(req, res) {
   if (epost && !EPOST.test(epost)) return svar(req, res, 400, { ok: false, feil: 'Ugyldig e-postadresse' });
 
   const { RESEND_API_KEY: nokkel, AVSENDER_EPOST: avsender, KONTAKT_EPOST: mottaker } = process.env;
-  if (!nokkel || !avsender || !mottaker) {
+  const mottakere = String(mottaker || '').split(',').map((a) => a.trim()).filter((a) => EPOST.test(a));
+  if (!nokkel || !avsender || !mottakere.length) {
     console.error('henvendelse: RESEND_API_KEY, AVSENDER_EPOST eller KONTAKT_EPOST mangler');
     return svar(req, res, 500, { ok: false, feil: 'Skjemaet er ikke satt opp ennå. Ring eller send e-post.' });
   }
@@ -95,7 +96,7 @@ export default async function handler(req, res) {
       headers: { Authorization: `Bearer ${nokkel}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: `${fra} <${avsender}>`,
-        to: [mottaker],
+        to: mottakere,
         ...(epost && { reply_to: epost }),
         subject: `${type} fra nettsiden: ${navn}`,
         text: tekst

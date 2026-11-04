@@ -574,7 +574,7 @@ export { default } from 'oppskalert-admin/api/henvendelse.js';
 |---|---|---|
 | `RESEND_API_KEY` | delt i Vercel-teamet | Nøkkel med bare sendetilgang. |
 | `AVSENDER_EPOST` | delt i Vercel-teamet | `skjema@oppskalert.no`. Domenet må være verifisert i Resend. |
-| `KONTAKT_EPOST` | prosjektet | Kundens adresse, der henvendelsene skal. |
+| `KONTAKT_EPOST` | prosjektet | Kundens adresse, der henvendelsene skal. Flere skilles med komma. |
 | `SIDENAVN` | prosjektet, valgfri | Navnet i Fra-feltet. Ellers domenet. |
 
 oppskalert.no har `DMARC p=reject`. Før domenet er verifisert i Resend (DKIM),

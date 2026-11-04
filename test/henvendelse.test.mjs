@@ -47,6 +47,12 @@ test('gyldig henvendelse sendes til kunden med svar-til avsenderen', async () =>
   assert.match(m.text, /\n\nHei$/);
 });
 
+test('flere mottakere i KONTAKT_EPOST, skilt med komma', async () => {
+  process.env.KONTAKT_EPOST = 'gunn@example.no, meg@example.no,';
+  await henvendelse(lagReq(gyldig()), lagRes());
+  assert.deepEqual(sendt[0].kropp.to, ['gunn@example.no', 'meg@example.no']);
+});
+
 test('SIDENAVN styrer navnet i Fra-feltet', async () => {
   process.env.SIDENAVN = 'Gunn K. Finnby';
   await henvendelse(lagReq(gyldig()), lagRes());
