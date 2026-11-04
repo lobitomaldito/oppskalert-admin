@@ -558,6 +558,84 @@ tekst, og `{}` i malens tekst byttes mot verdien: `{} | Butikknavn`.
 
 Sidens egen `content/<side>.json` skrives bare når `edits` har innhold.
 
+## Skjemaer: henvendelser på e-post
+
+`api/henvendelse.js` tar imot kontaktskjema, bestillingsforespørsel og
+interesseskjema, og sender dem som e-post til kunden gjennom Resend. Ingenting
+lagres. Svar-til er den som fylte ut, så kunden svarer rett fra innboksen.
+Opt-in: sider uten skjema trenger den ikke.
+
+```js
+// api/henvendelse.js i prosjektet, ingenting annet
+export { default } from 'oppskalert-admin/api/henvendelse.js';
+```
+
+| Variabel | Hvor | Beskrivelse |
+|---|---|---|
+| `RESEND_API_KEY` | delt i Vercel-teamet | Nøkkel med bare sendetilgang. |
+| `AVSENDER_EPOST` | delt i Vercel-teamet | `skjema@oppskalert.no`. Domenet må være verifisert i Resend. |
+| `KONTAKT_EPOST` | prosjektet | Kundens adresse, der henvendelsene skal. |
+| `SIDENAVN` | prosjektet, valgfri | Navnet i Fra-feltet. Ellers domenet. |
+
+oppskalert.no har `DMARC p=reject`. Før domenet er verifisert i Resend (DKIM),
+avvises hver mail, og endepunktet svarer 502.
+
+### Feltene
+
+Påkrevd: `navn`, og `epost` eller `telefon`. `melding` står sist i mailen. Alle
+andre felt (`tjeneste`, `dag`, `tid` …) listes i rekkefølgen de kom, høyst 20.
+Styrefeltene:
+
+| Felt | Hva |
+|---|---|
+| `skjema` | Emnet. `Bestilling` gir «Bestilling fra nettsiden: Kari Nordmann». Standard «Henvendelse». |
+| `nettside` | Honningkrukke. Skjult for mennesker, fylt ut av roboter. Svarer ok og sender ingenting. |
+| `_t` | Millisekunder fra skjemaet ble åpnet til det ble sendt. Under 3000 regnes som robot. |
+| `_retur` | Stien brukeren sendes tilbake til uten JavaScript. Bare stier på egen side. |
+
+Fem innsendinger per IP per ti minutter, deretter 429.
+
+### Markup
+
+Skjemaet skal virke uten JavaScript (byggeregel 5): `action` og `method` står i
+HTML-en, og endepunktet sender da tilbake til siden med `#skjema-sendt` eller
+`#skjema-feil`.
+
+```html
+<form action="/api/henvendelse" method="post" data-henvendelse>
+  <input type="hidden" name="skjema" value="Bestilling">
+  <input type="hidden" name="_retur" value="/">
+  <label class="honning" aria-hidden="true">Nettside <input name="nettside" tabindex="-1" autocomplete="off"></label>
+  …
+</form>
+```
+
+```css
+.honning{position:absolute;left:-9999px}
+```
+
+Med JavaScript: send `_t` og `Accept: application/json`, og vis svaret i skjemaet.
+
+```js
+const startet = performance.now();
+skjema.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(skjema));
+  data._t = Math.round(performance.now() - startet);
+  const r = await fetch('/api/henvendelse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(data)
+  }).catch(() => null);
+  const svar = r ? await r.json().catch(() => ({})) : {};
+  // svar.ok: vis kvittering. Ellers: vis svar.feil, med telefon som reserve.
+});
+```
+
+Før levering: prøv de tre utfallene i nettleseren (byggeregel 15): tomt skjema,
+gyldig innsending som kommer fram i kundens innboks, og en feil (for eksempel
+uten `KONTAKT_EPOST`).
+
 ## Kjente begrensninger
 
 **IP-sperren teller per funksjonsinstans.** Fem feil PIN fra samme IP gir 15
