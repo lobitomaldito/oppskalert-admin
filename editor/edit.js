@@ -135,10 +135,37 @@
     document.execCommand('insertText', false, text);
   });
 
-  // Normalise browser bold/italic tags to the semantic ones the site styles use
-  function normalizeHtml(s) {
-    return s.replace(/<(\/?)b>/gi, '<$1strong>').replace(/<(\/?)i>/gi, '<$1em>');
+  // Normalise browser bold/italic tags to the semantic ones the site styles use.
+  // Et felt som ikke kan holde blokker (<p>, overskrift, span) faar linjeskift
+  // i stedet for <div>/<p>: en <div> inne i <p> lukker avsnittet i nettleseren,
+  // og teksten etter faller ut av feltets stil (annen farge, annen plass).
+  function normalizeHtml(s, el) {
+    s = s.replace(/<(\/?)b>/gi, '<$1strong>').replace(/<(\/?)i>/gi, '<$1em>');
+    return el && !tarBlokker(el) ? flatBlokker(s) : s;
   }
+  var BLOKKFELT = /^(DIV|SECTION|ARTICLE|ASIDE|BLOCKQUOTE|FIGURE|DETAILS|MAIN|HEADER|FOOTER|TD|TH|DD)$/;
+  function tarBlokker(el) { return BLOKKFELT.test(el.tagName); }
+  function flatBlokker(s) {
+    return s
+      .replace(/<(div|p)(\s[^>]*)?>\s*<br\s*\/?>\s*<\/\1>/gi, '<br>')
+      .replace(/^\s*<(div|p)(\s[^>]*)?>/i, '')
+      .replace(/<(div|p)(\s[^>]*)?>/gi, '<br>')
+      .replace(/<\/(div|p)>/gi, '')
+      .replace(/(&nbsp;|\s)+<br>/gi, '<br>')
+      .replace(/(<br>)+$/i, '');
+  }
+
+  // Enter i et felt som ikke tar blokker gir <br>. Ellers legger nettleseren
+  // inn en <div>, som normalizeHtml uansett ville gjort om ved lagring.
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    var t = e.target;
+    if (!t || !t.isContentEditable) return;
+    var felt = t.closest('[data-edit], [data-list-field]');
+    if (!felt || tarBlokker(felt)) return;
+    e.preventDefault();
+    document.execCommand('insertLineBreak');
+  });
 
   // --- Floating format toolbar: bold / italic / clear (appears on text selection) ---
   (function () {
@@ -566,7 +593,7 @@
     return [].slice.call(container.querySelectorAll('[data-list-item]')).map(function (item) {
       var obj = {};
       [].slice.call(item.querySelectorAll('[data-list-field]')).forEach(function (el) {
-        var html = normalizeHtml(cleanFieldHtml(el).trim());
+        var html = normalizeHtml(cleanFieldHtml(el).trim(), el);
         obj[el.getAttribute('data-list-field')] = fieldIsEmpty(html) ? '' : html;
       });
       [].slice.call(item.querySelectorAll('[data-list-image-field]')).forEach(function (el) {
@@ -1054,7 +1081,7 @@
   function publish() {
     var edits = {};
     textFields.forEach(function (el) {
-      var html = normalizeHtml(cleanFieldHtml(el).trim());
+      var html = normalizeHtml(cleanFieldHtml(el).trim(), el);
       // Normalize a browser-inserted "<br>" in an untouched field back to "",
       // so :empty keeps hiding optional fields (e.g. a blank photo credit).
       edits[el.getAttribute('data-edit')] = fieldIsEmpty(html) ? '' : html;

@@ -73,3 +73,16 @@ test('skjul-knappen har ord, ikke oeye-ikon, og fjerning spoer foerst', () => {
   assert.match(js, /'Vis' : 'Skjul'/);
   assert.match(js, /a === 'del'[^;]*window\.confirm/);
 });
+
+test('Enter i et avsnitt eller en overskrift gir linjeskift, ikke <div>', () => {
+  const flatBlokker = funksjon('flatBlokker');
+  assert.equal(
+    flatBlokker('Kjøp kurs.&nbsp; &nbsp;&nbsp;<div>Reformer har egne priser.&nbsp;</div>'),
+    'Kjøp kurs.<br>Reformer har egne priser.&nbsp;'
+  );
+  assert.equal(flatBlokker('Klippekort og&nbsp;<div>drop-in</div>'), 'Klippekort og<br>drop-in');
+  assert.equal(flatBlokker('<div>En</div><div><br></div><div>To</div>'), 'En<br><br>To');
+  assert.equal(flatBlokker('Uten blokker <strong>her</strong>'), 'Uten blokker <strong>her</strong>');
+  assert.match(js, /normalizeHtml\(cleanFieldHtml\(el\)\.trim\(\), el\)/);
+  assert.match(js, /execCommand\('insertLineBreak'\)/);
+});
