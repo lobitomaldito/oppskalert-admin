@@ -261,6 +261,16 @@ test('header med lenke til / er greit', () => {
   ])), []);
 });
 
+test('logo til egen spraakforside (/en paa lang="en") er greit, /de paa lang="en" er ikke', () => {
+  const funn = sidestruktur.sjekk(p([
+    { sti: 'templates/404.html', tekst: 'x' },
+    { sti: 'templates/en.html', tekst: '<html lang="en"><header><a href="/en">Logo</a></header></html>' },
+    { sti: 'templates/en-services.html', tekst: '<html lang="en-GB"><header><a href="/en/">Logo</a></header></html>' },
+    { sti: 'templates/en-contact.html', tekst: '<html lang="en"><header><a href="/de">Logo</a></header></html>' }
+  ]));
+  assert.deepEqual(funn.map((f) => f.fil), ['templates/en-contact.html']);
+});
+
 test('ingen header/nav i det hele tatt gir ingen funn fra hjemlenke-sjekken', () => {
   assert.deepEqual(sidestruktur.sjekk(p([
     { sti: 'templates/404.html', tekst: 'x' },

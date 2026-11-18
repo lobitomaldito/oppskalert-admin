@@ -25,8 +25,11 @@ export default {
       const dok = parse(fil.tekst);
       const ramme = dok.querySelector('header') || dok.querySelector('nav');
       if (!ramme) continue; // ingen header/nav i det hele tatt er en annen regels bord
+      // Paa en side med <html lang="en"> er /en og /en/ forsiden for det spraaket.
+      const lang = (dok.querySelector('html')?.getAttribute('lang') || '').split('-')[0].trim().toLowerCase();
+      const hjem = lang ? new Set([...HJEM_HREF, `/${lang}`, `/${lang}/`]) : HJEM_HREF;
       const harHjemlenke = ramme.querySelectorAll('a[href]')
-        .some((a) => HJEM_HREF.has((a.getAttribute('href') || '').trim()));
+        .some((a) => hjem.has((a.getAttribute('href') || '').trim()));
       if (!harHjemlenke) {
         funn.push({
           fil: fil.sti, linje: 0,
