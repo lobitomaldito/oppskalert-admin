@@ -313,3 +313,26 @@ test('data-edit med data-tone-N er en feil, med mindre skriptet leser tone 1 fra
   assert.deepEqual(toneOgEdit.sjekk(p([mal, { sti: 'static/js/main.js', tekst: rettet }])), []);
   assert.deepEqual(toneOgEdit.sjekk(p([{ sti: 'templates/a.html', tekst: '<p data-tone-1="x">x</p><p data-edit="a.b">y</p>' }])), []);
 });
+
+// Gaar via kjor() med STANDARDREGLER, saa testen feiler ogsaa hvis regelen
+// fjernes fra index.mjs, ikke bare hvis fila slettes.
+test('mal med data-page-key uten /admin/edit.js er en feil (Waaltorp 2026-11-18)', () => {
+  const editFeil = (filer) => kjor(p(filer)).feil.filter((f) => f.regel === 'edit-skript');
+  const funn = editFeil([
+    { sti: 'templates/index.html', tekst: '<head></head>\n<body data-page-key="index">x</body>' },
+    { sti: 'templates/om.html', tekst: '<body data-page-key="om"><!-- <script src="/admin/edit.js"></script> --></body>' }
+  ]);
+  assert.deepEqual(funn.map((f) => `${f.fil}:${f.linje}`), ['templates/index.html:2', 'templates/om.html:1']);
+  assert.match(funn[0].melding, /admin\/edit\.js/);
+
+  assert.deepEqual(editFeil([
+    { sti: 'templates/index.html', tekst: '<body data-page-key="index"><script src="/admin/edit.js" defer></script></body>' },
+    { sti: 'templates/om.html', tekst: '<body data-page-key="om"><script defer src=\'admin/edit.js?v=2\'></script></body>' },
+    { sti: 'templates/404.html', tekst: '<body data-page-key="404">x</body>' },
+    { sti: 'templates/gammel.html', tekst: '<meta http-equiv="refresh" content="0; url=/"><body data-page-key="gammel"></body>' },
+    { sti: 'templates/demo.html', tekst: '<body>uten noekkel</body>' }
+  ]), []);
+  assert.equal(editFeil([
+    { sti: 'templates/index.html', tekst: '<body data-page-key="index"><script src="/admin/edit.json"></script></body>' }
+  ]).length, 1);
+});

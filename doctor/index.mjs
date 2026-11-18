@@ -19,12 +19,13 @@ import sidehode from './regler/sidehode.mjs';
 import sidestruktur from './regler/sidestruktur.mjs';
 import hardkodetArstall from './regler/hardkodet-arstall.mjs';
 import toneOgEdit from './regler/tone-og-edit.mjs';
+import editSkript from './regler/edit-skript.mjs';
 
 export const STANDARDREGLER = [
   margin, strongB, tokens, fonts, byggetid, strek, ikkeXmenY, sidenokkel,
   dekningTekst, dekningListe, dekningRammeTekst, dekningBilde, dekningRammeBilde, gjentattGruppe,
   samlingMal, samlingFelt, malUnderstrek, apiModultype,
-  dodeLenker, sidehode, sidestruktur, hardkodetArstall, toneOgEdit
+  dodeLenker, sidehode, sidestruktur, hardkodetArstall, toneOgEdit, editSkript
 ];
 
 export function kjor(prosjekt, regler = STANDARDREGLER) {

@@ -112,6 +112,12 @@ npx oppskalert-admin doctor .
 node build.mjs
 ```
 
+**v1.6.5:** `doctor` feiler når en mal har `data-page-key` men ikke laster
+`/admin/edit.js` (regelen `edit-skript`). Uten skriptet åpner verken `?edit`,
+tastaturkoden eller trykk i bunnteksten innloggingen. Kom fra Waaltorp
+18.11.2026. Gir `doctor` denne feilen etter oppgraderingen, legg
+`<script src="/admin/edit.js" defer></script>` inn før `</body>` i malen.
+
 **v1.5.8:** knappen som skjuler et listeelement sier «Skjul» og «Vis» i stedet
 for et øye-ikon, og redigeringslinja forteller at elementet ikke vises for
 besøkende. Øyet ble lest som «forhåndsvis», og en klient skjulte sin egen profil
@@ -330,8 +336,9 @@ Fonts, `api/*.js` med et modulsystem som ikke stemmer med `"type"` i
 `package.json`, manglende redigeringsmarkør på tekst og bilder (se
 Dekningskontrollen under), lenker uten mål (`href="#"`, tom `href`, eller et
 internt anker uten matchende `id`), manglende `<title>`/meta description/
-favicon på en side, manglende `templates/404.html`, og en header/nav uten
-lenke hjem. Disse varsles: umålt byggetid, tankestrek, mulige «ikke X, men
+favicon på en side, manglende `templates/404.html`, en header/nav uten
+lenke hjem, og en mal med `data-page-key` som ikke laster `/admin/edit.js`
+(`edit-skript`, da åpner ingenting innloggingen). Disse varsles: umålt byggetid, tankestrek, mulige «ikke X, men
 Y»-setninger, manglende redigeringsmarkør i `li`, `h4` og topp-/bunntekst, tre
 eller flere like søsken-elementer på rad, og et hardkodet årstall ved siden av
 `©`. Varsler er kandidater til gjennomlesing og stopper ingenting.
