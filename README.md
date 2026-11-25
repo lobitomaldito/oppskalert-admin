@@ -680,7 +680,9 @@ export { default } from 'oppskalert-admin/api/instagram.js';
    til kundens eget domene.
 2. Inviter kundens brukernavn som **Instagram Tester** under App roles → Roller.
    Appen er i utviklingsmodus: maks 50 testere, og bare de med rolle kan logge inn.
-3. `IG_BRUKER` og `CRON_SECRET` i prosjektet, så et nytt bygg.
+3. Koble de fem delte variablene til prosjektet (Vercel → Team Settings →
+   Environment Variables → hver av dem → legg til prosjektet), og sett
+   `IG_BRUKER` og `CRON_SECRET` i prosjektet. Så et nytt bygg.
 4. Test selv: åpne `/api/instagram?koble` og logg inn med Oppskalert sin
    Instagram. Siden «Innloggingen virker» viser hva den fant, og ingenting lagres.
 5. Send kunden: godta invitasjonen på
