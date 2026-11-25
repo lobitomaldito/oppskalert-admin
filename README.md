@@ -112,6 +112,10 @@ npx oppskalert-admin doctor .
 node build.mjs
 ```
 
+**v1.7.0:** ny modul `api/instagram.js` henter kundens Instagram-innlegg til
+forsiden hver natt. Opt-in, se «Instagram på forsiden». Ingenting endres for
+prosjekter som ikke tar den i bruk.
+
 **v1.6.5:** `doctor` feiler når en mal har `data-page-key` men ikke laster
 `/admin/edit.js` (regelen `edit-skript`). Uten skriptet åpner verken `?edit`,
 tastaturkoden eller trykk i bunnteksten innloggingen. Kom fra Waaltorp
@@ -643,6 +647,53 @@ Før levering: prøv de tre utfallene i nettleseren (byggeregel 15): tomt skjema
 gyldig innsending som kommer fram i kundens innboks, og en feil (for eksempel
 uten `KONTAKT_EPOST`).
 
+## Instagram på forsiden
+
+`api/instagram.js` henter de 18 siste innleggene fra kundens Instagram hver
+natt, laster ned bildene til `static/assets/img/insta/` og skriver lista og
+tallene inn i `content/index.json` i ett commit. Besøkende kobler seg aldri til
+Instagram. Opt-in: sider uten Instagram-seksjon trenger den ikke.
+
+```js
+// api/instagram.js i prosjektet, ingenting annet
+export { default } from 'oppskalert-admin/api/instagram.js';
+```
+
+```json
+// vercel.json
+"crons": [{ "path": "/api/instagram", "schedule": "15 4 * * *" }]
+```
+
+| Variabel | Hvor | Beskrivelse |
+|---|---|---|
+| `IG_APP_ID`, `IG_CONFIG_ID` | delt i Vercel-teamet | Meta-appen «Oppskalert nettsider» og innloggingsoppsettet «Nettside Instagram» (bare `instagram_basic`). |
+| `IG_APP_SECRET` | delt i Vercel-teamet | App-hemmeligheten fra Meta. |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | delt i Vercel-teamet | Supabase `oppskalert`, tabellen `instagram_tilkoblinger`. Secret-nøkkelen (`sb_secret_…`). |
+| `IG_BRUKER` | prosjektet | Kundens Instagram-brukernavn, uten @. Bare den kontoen kan fylle siden. |
+| `CRON_SECRET` | prosjektet | `openssl rand -hex 32 \| vercel env add CRON_SECRET production`. Uten den avvises cron. |
+| `IG_REDIRECT_URI` | prosjektet, valgfri | Ellers `https://<host>/api/instagram`. Sett den når siden nås på flere domener. |
+
+### Ny kunde (ca. 10 minutter)
+
+1. Legg `https://<domenet>/api/instagram` til som redirect URL i Meta-appen
+   (Instagram API, «API setup with Unified login»). Gjenta når siden flytter
+   til kundens eget domene.
+2. Inviter kundens brukernavn som **Instagram Tester** under App roles → Roller.
+   Appen er i utviklingsmodus: maks 50 testere, og bare de med rolle kan logge inn.
+3. `IG_BRUKER` og `CRON_SECRET` i prosjektet, så et nytt bygg.
+4. Test selv: åpne `/api/instagram?koble` og logg inn med Oppskalert sin
+   Instagram. Siden «Innloggingen virker» viser hva den fant, og ingenting lagres.
+5. Send kunden: godta invitasjonen på
+   https://www.instagram.com/accounts/manage_access/ (fanen «Testerinvitasjoner»,
+   bare i nettleseren), og klikk `https://<domenet>/api/instagram?koble`.
+
+### Markup
+
+Forsiden må ha lista `data-editable-list="insta"` med et bilde i
+`data-list-image-field="bilde"` per kort (alt-teksten settes fra bildeteksten),
+og gjerne `data-edit="ig_innlegg"` og `data-edit="ig_folgere"` for tallene.
+Høydepunktene og bioen er ikke tilgjengelige fra Meta og forblir manuelle.
+
 ## Kjente begrensninger
 
 **IP-sperren teller per funksjonsinstans.** Fem feil PIN fra samme IP gir 15
@@ -669,6 +720,10 @@ aldri til noe som skal være hemmelig. Skal innholdet bort, slett kortet.
 127.0.0.1 og bruker samme PIN-sperre som produksjon, men den faller tilbake på
 PIN `1234` når `ADMIN_PIN` mangler, og den skriver filer i prosjektet. Legg den
 aldri ut gjennom en tunnel eller en proxy.
+
+**Instagram-bilder blir liggende i repoet.** Henteren laster bare ned nye
+innlegg, men sletter aldri gamle bilder. Med 18 bilder i rutenettet og noen
+innlegg i uka er det noen få MB i året. Rydd hvis et repo blir tungt.
 
 ## Lisens
 
