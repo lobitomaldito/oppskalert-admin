@@ -262,12 +262,29 @@ liggende i hvert eneste kundeprosjekt (lekker én, kan angriperen lage tokens
 for samtlige). Et fine-grained token per kundeside begrenser skaden ved
 lekkasje til den ene siden.
 
-Kommandoen åpner GitHub-skjemaet for deg. Velg:
+Kommandoen åpner GitHub-skjemaet ferdig utfylt med URL-parametrene GitHub
+dokumenterer ([Pre-filling fine-grained personal access token details using URL
+parameters](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)):
 
-- **Repository access:** Only select repositories, og velg det ene repoet
-  siden ligger i. Ikke «All repositories».
-- **Permissions:** under Repository permissions, sett **Contents** til
-  **Read and write**. Alt annet kan stå på «No access».
+| Felt | Verdi |
+|---|---|
+| Token name | `admin-<repo>`, kuttet til 40 tegn |
+| Description | `oppskalert-admin: publisering fra admin-panelet til <eier>/<repo>` |
+| Resource owner | eieren av repoet |
+| Expiration | No expiration (`expires_in=none`) |
+| Permissions | Contents = Read and write |
+
+**Ingen utløp, med vilje.** Går tokenet ut, slutter Publiser-knappen på
+kundesiden å virke uten forvarsel. Tilgangen er allerede begrenset til ett repo
+og Contents, så et token som varer gir mindre risiko enn en kundeside som
+stopper.
+
+Repovalget har ingen URL-parameter, og GitHub forhåndsvelger **All
+repositories**. Du gjør derfor tre klikk:
+
+1. **Repository access:** bytt til Only select repositories.
+2. **Select repositories:** velg det ene repoet siden ligger i.
+3. **Generate token**, og kopier tokenet.
 
 Lim inn det ferdige tokenet når kommandoen ber om det. Det vises ikke mens du
 skriver, og det havner aldri på disk, i en logg eller på en kommandolinje.

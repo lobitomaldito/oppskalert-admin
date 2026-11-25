@@ -8,6 +8,23 @@ import { lagPin, lesRepo, settEnv, tokenHarGyldigFormat, sjekkToken } from './_s
 
 const GITHUB_TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new';
 
+// Fyller ut GitHub-skjemaet med URL-parametre, bare de som er dokumentert:
+// https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens
+// (avsnittet "Pre-filling fine-grained personal access token details using URL parameters").
+// expires_in=none: et token som gaar ut stopper publiseringen paa kundesiden
+// uten forvarsel. Repovalget har ingen parameter, det er de to klikkene som gjenstaar.
+export function lagTokenUrl(repo) {
+  const [eier, navn] = repo.split('/');
+  const q = new URLSearchParams({
+    name: `admin-${navn}`.slice(0, 40), // GitHub tillater maks 40 tegn
+    description: `oppskalert-admin: publisering fra admin-panelet til ${repo}`,
+    target_name: eier,
+    expires_in: 'none',
+    contents: 'write'
+  });
+  return `${GITHUB_TOKEN_URL}?${q}`;
+}
+
 // io = { kjor, spor, skriv, aapne, naa, lesToken, rot, malByggetid, skrivAdminTid, hent }
 export async function kobler(io) {
   const { kjor, spor, skriv, aapne, lesToken, malByggetid, skrivAdminTid, hent } = io;
@@ -41,11 +58,12 @@ export async function kobler(io) {
   // Rekkefoelgen her er poenget: forklar rettighetene foer siden aapnes,
   // saa brukeren vet hva som skal fylles ut naar GitHub-skjemaet dukker opp.
   skriv('');
-  skriv('Lag et fine-grained token paa GitHub, med disse to valgene:');
-  skriv(`  - Repository access: kun ${repo}, ikke alle repoer.`);
-  skriv('  - Permissions: Contents = Read and write.');
-  skriv('Aapner GitHub-skjemaet for deg naa.');
-  aapne(GITHUB_TOKEN_URL);
+  skriv('Aapner GitHub-skjemaet. Navn, eier, utloep og tilgang (Contents = Read and write) er fylt ut.');
+  skriv('Du gjoer tre klikk:');
+  skriv('  1. Repository access: bytt fra All repositories til Only select repositories.');
+  skriv(`  2. Select repositories: velg ${repo.split('/')[1]}.`);
+  skriv('  3. Trykk Generate token nederst, og kopier tokenet.');
+  aapne(lagTokenUrl(repo));
 
   skriv('Lim inn det ferdige tokenet her (det vises ikke mens du skriver):');
   let token;
