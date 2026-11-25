@@ -26,7 +26,7 @@ test('lesPanel finner lister, felt, standardinnhold, tekster og omtalelister, me
   assert.deepEqual(logo.standard, [{ bilde: '/l/1.png', tittel: 'Coop' }]);
   assert.equal(funn.omtaler[0].oppdrag, 'Konferansier');
   assert.deepEqual(funn.omtaler[0].felt.map((f) => f.navn), ['tekst', 'logo', 'fra', 'tittel']);
-  assert.deepEqual(funn.tekster, [{ fane: 'Nøkkeltall', side: 'stand-up', nokkel: 'tall_show', etikett: 'Antall show', standard: '500+' }]);
+  assert.deepEqual(funn.tekster, [{ fane: 'Nøkkeltall', rekke: 99, side: 'stand-up', nokkel: 'tall_show', etikett: 'Antall show', standard: '500+' }]);
 });
 
 test('lagPanel grupperer i faner i rekkefølge', () => {
@@ -58,4 +58,12 @@ test('bakeLister setter trygge lenker og skjuler tomme', () => {
   assert.equal(a[1].getAttribute('href'), undefined);
   assert.equal(a[1].hasAttribute('hidden'), true);
   assert.equal(a[2].hasAttribute('hidden'), true);
+});
+
+test('omtalelister har malens kort som standard, og tomt bildefelt skjuler bildet', () => {
+  const funn = lesPanel(parse(MAL), 'index');
+  assert.deepEqual(funn.omtaler[0].standard, [{ tekst: '«Bra»', logo: '/l/2.png', fra: 'Coop' }]);
+  const dom = parse('<ul data-editable-list="o"><li data-list-item><img data-list-image-field="logo" src="/l/2.png"></li></ul>');
+  bakeLister(dom, () => [{ logo: '' }]);
+  assert.equal(dom.querySelector('img').hasAttribute('hidden'), true);
 });

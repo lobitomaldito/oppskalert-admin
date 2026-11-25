@@ -112,6 +112,12 @@ npx oppskalert-admin doctor .
 node build.mjs
 ```
 
+**v1.8.0:** kontrollpanel på `/admin/panel`, med egen knapp i admin-baren:
+omtaler fra kundene, show med dato, logoer i fast format, media og nøkkeltall.
+Opt-in med `data-panel`-merker, se «Kontrollpanel». Lister med `data-panel`
+redigeres bare i panelet, ikke lenger inline. Nytt i bygget: `data-list-href`
+gir lenker i listekort, og et tomt bildefelt skjuler bildet.
+
 **v1.7.0:** ny modul `api/instagram.js` henter kundens Instagram-innlegg til
 forsiden hver natt. Opt-in, se «Instagram på forsiden». Ingenting endres for
 prosjekter som ikke tar den i bruk.
@@ -646,6 +652,52 @@ skjema.addEventListener('submit', async (e) => {
 Før levering: prøv de tre utfallene i nettleseren (byggeregel 15): tomt skjema,
 gyldig innsending som kommer fram i kundens innboks, og en feil (for eksempel
 uten `KONTAKT_EPOST`).
+
+## Kontrollpanel
+
+`/admin/panel` samler det kunden oppdaterer ofte, i faner, med samme PIN som
+resten av admin. Admin-baren får knappen **Kontrollpanel** når siden har noe
+merket, med antall nye omtaler i parentes. Lister med `data-panel` eies av
+panelet og er låst for inline-redigering, så de har én eier.
+
+| Merke | Hvor | Virkning |
+|---|---|---|
+| `data-panel="Show"` | `data-editable-list` | Egen fane med et skjema for lista: legg til, endre, flytt, fjern. |
+| `data-panel="Nøkkeltall"` | `data-edit` | Tekstfelt i fanen. |
+| `data-panel-etikett="…"` | lista eller feltet | Overskriften i panelet. |
+| `data-panel-rekke="1"` | lista eller feltet | Rekkefølgen på fanene. |
+| `data-panel-type="dato"` | felt i kortet | Datovelger. Lagres som `2026-12-16`, vises som `16.12`. Passerte kort tas ut i bygget og skjules av et lite skript mellom byggene. Sett den også på speilede kopier. |
+| `data-panel-type="logo"` | bildefelt | Hvit bakgrunn som henger sammen med kanten blir gjennomsiktig, tom kant kuttes, maks 400 × 160, png. |
+| `data-panel-type="lenke"` / `data-list-href="felt"` | `<a>` i kortet | Lenkefelt. Tom lenke skjuler elementet. Bare http(s), mailto, tel og stier. |
+| `data-panel-type="lang"` | felt i kortet | Flere linjer. |
+| `data-panel-omtaler` | omtaleliste | En godkjent omtale kan legges her. Med verdi (`="Konferansier"`) er lista bare forhåndsvalgt når kunden valgte det oppdraget. |
+
+### Omtaler fra kundene
+
+```js
+// api/tilbakemelding.js i prosjektet
+export { default } from 'oppskalert-admin/api/tilbakemelding.js';
+```
+
+Skjemaet på siden sender JSON til `/api/tilbakemelding`: `navn`, `firma`,
+`tekst` og `samtykke` er påkrevd, `rolle`, `arrangement` og `oppdrag` valgfrie,
+`nettside` (honningkrukke) og `_t` (millisekunder brukt) som i `henvendelse.js`.
+Omtalen lagres i Supabase-tabellen `tilbakemeldinger` (prosjektet `oppskalert`,
+RLS uten policyer) med `GITHUB_REPO` som nøkkel, og vises ikke før kunden
+trykker «Publiser» i panelet. Da fylles feltene i hver valgt liste etter navn:
+`tekst` (med «»), `fra` (Kari N., firma, arrangement), `logo`/`bilde`, `navn`,
+`firma`, `tittel`. Alle listene skrives i ett commit.
+
+Miljøvariabler: `SUPABASE_URL` og `SUPABASE_SERVICE_ROLE_KEY` (delt i
+Vercel-teamet, koble dem til prosjektet), `GITHUB_REPO`, `ADMIN_PIN`.
+
+### API
+
+- `POST /api/save` med `{ pin, les: 'side' }` gir `content/<side>.json` fra GitHub.
+- `POST /api/save` med `{ pin, sider: { side: edits, … }, bilder }` skriver
+  flere sider i ett commit (maks 10).
+
+`oppskalert-admin dev` kan alt dette lokalt, med omtalene i minnet.
 
 ## Instagram på forsiden
 

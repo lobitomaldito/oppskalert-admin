@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Kontrollpanel | Admin</title>
+<!-- Kontrollpanelet: omtaler fra kundene, show, logoer, media og nøkkeltall.
+     Kopiert til dist/admin/ av bygget. Fanene kommer fra dist/admin/panel.json. -->
+<link rel="stylesheet" href="/css/tokens.css">
+<link rel="stylesheet" href="/admin/side.css">
+<style>
+  main{max-width:860px}
+  .stor{background:var(--blekk)}
+  .faner{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:26px}
+  .faner button{min-height:48px;padding:0 18px;border:1px solid var(--linje);border-radius:99px;background:var(--hvit);cursor:pointer;font-size:16px}
+  .faner button[aria-selected=true]{background:var(--blekk);border-color:var(--blekk);color:#fff}
+  .teller{display:inline-block;min-width:22px;margin-left:6px;padding:0 7px;border-radius:99px;background:var(--fare);color:#fff;font-size:13px;line-height:22px;text-align:center}
+  .faner button[aria-selected=true] .teller{background:#fff;color:var(--blekk)}
+  h2{font-size:21px;line-height:1.25;margin:30px 0 4px}
+  .ingress{color:var(--dempet);font-size:16px;margin-bottom:12px}
+  .rad{grid-template-columns:72px 1fr}
+  .rad img,.rad .tom{width:72px;height:72px;object-fit:contain;background:var(--flate)}
+  .rad--uten-bilde{grid-template-columns:1fr}
+  .rad .knapper .knapp{min-height:44px;font-size:15px}
+  .omtale{padding:18px;background:var(--hvit);border:1px solid var(--linje);border-radius:14px}
+  .omtale blockquote{font-size:18px;line-height:1.55;margin-bottom:10px;white-space:pre-line}
+  .omtale .meta{color:var(--dempet);font-size:15px}
+  .skjema{margin-top:16px;padding:18px;background:var(--flate);border-radius:12px}
+  .logoprove{display:flex;align-items:center;justify-content:center;width:220px;height:110px;border:1px dashed var(--linje);border-radius:10px;background:var(--hvit)}
+  .logoprove img{max-width:200px;max-height:80px}
+  .avkryss{margin-bottom:8px}
+  .lagre{position:sticky;bottom:0;padding:14px 0;background:var(--flate)}
+  input[type=date],input[type=url]{width:100%;padding:14px;border:1px solid var(--linje);border-radius:10px;background:var(--hvit);font-size:18px}
+</style>
+</head>
+<body>
+<header class="topp">
+  <a href="/">‹ Til nettsiden</a>
+  <button type="button" class="lenkeknapp" id="loggut" hidden>Logg ut</button>
+</header>
+<main id="panel-app" aria-live="polite"></main>
+<script src="/admin/bilde.js"></script>
+<script src="/admin/panel.js"></script>
+</body>
+</html>

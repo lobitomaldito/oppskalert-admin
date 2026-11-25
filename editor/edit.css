@@ -171,6 +171,7 @@ body.adm-editing .dm__media:has(.adm-posing)::after { display: none; }
 }
 
 /* En samling: teksten redigeres i innlegget, men bildene kan faa nytt utsnitt her. */
+.adm-readonly[data-panel]::before { content: '🔒 Redigeres i Kontrollpanelet'; }
 .adm-readonly[data-content-src^="samling:"]::before { content: '🔒 Tekst redigeres i innlegget · trykk på et bilde for å flytte utsnitt'; }
 body.adm-editing [data-samling-post] img { cursor: pointer; }
 

@@ -83,6 +83,9 @@ export function bakeLister(dom, slaOpp) {
         const posModal = post[`${k}@pos-modal`];
         if (posModal) felt.setAttribute('data-pos-modal', posModal);
         if (post[k] == null && !pos) continue;
+        // Tomt bildefelt (f.eks. en omtale uten logo): skjul bildet, ellers
+        // viser kortet logoen til kortet som sto paa samme plass i malen.
+        if (post[k] === '') { felt.setAttribute('hidden', ''); continue; }
         if (post[k] != null) {
           if (felt.tagName === 'IMG') {
             felt.setAttribute('src', post[k]);

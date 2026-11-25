@@ -253,7 +253,9 @@
   function refreshFields() {
     textFields     = [].slice.call(document.querySelectorAll('[data-edit]')).filter(function (el) { return !inMirror(el); });
     imageFields    = [].slice.call(document.querySelectorAll('[data-edit-image]')).filter(function (el) { return !inMirror(el); });
-    listContainers = [].slice.call(document.querySelectorAll('[data-editable-list]')).filter(function (el) { return !inMirror(el); });
+    // Lister med data-panel eies av kontrollpanelet (/admin/panel), der de har
+    // datoer, lenker og logoformat som inline-redigering ikke kan ta vare paa.
+    listContainers = [].slice.call(document.querySelectorAll('[data-editable-list]')).filter(function (el) { return !inMirror(el) && !el.hasAttribute('data-panel'); });
   }
   refreshFields();
 
@@ -265,6 +267,7 @@
     '<button class="adm__btn" data-act="toggle">Rediger</button>' +
     '<button class="adm__btn" data-act="undo" hidden title="Angre siste endring (Cmd/Ctrl+Z)">↶ Angre</button>' +
     '<button class="adm__btn adm__btn--primary" data-act="publish" hidden>Publiser</button>' +
+    '<a class="adm__btn" data-act="panel" href="/admin/panel" hidden>Kontrollpanel</a>' +
     '<span class="adm__status"></span>' +
     '<button class="adm__btn adm__btn--ghost" data-act="logout">Logg ut</button>';
   document.body.appendChild(bar);
@@ -279,6 +282,21 @@
       location.href = location.pathname;
     };
   }
+
+  // Kontrollpanel-knappen vises bare naar siden har et panel, med et tall naar
+  // det ligger nye omtaler fra kundene og venter.
+  (function () {
+    var panelBtn = bar.querySelector('[data-act="panel"]');
+    fetch('/admin/panel.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (p) {
+      if (!p) return;
+      panelBtn.hidden = false;
+      if (!p.omtaler || !p.omtaler.length) return;
+      return fetch('/api/tilbakemelding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: currentPin(), handling: 'liste' }) })
+        .then(function (r) { return r.json(); }).then(function (j) {
+          if (j.ok && j.omtaler.length) panelBtn.textContent = 'Kontrollpanel (' + j.omtaler.length + ' nye)';
+        });
+    }).catch(function () {});
+  })();
 
   var status     = bar.querySelector('.adm__status');
   var publishBtn = bar.querySelector('[data-act="publish"]');
@@ -466,7 +484,7 @@
     imageFields.forEach(function (el) { decorateImageField(el, on); });
     listContainers.forEach(function (c) { activateList(c, on); });
     decorateGalleries(on);
-    [].slice.call(document.querySelectorAll('[data-content-src]')).forEach(function (m) {
+    [].slice.call(document.querySelectorAll('[data-content-src], [data-editable-list][data-panel]')).forEach(function (m) {
       m.classList.toggle('adm-readonly', on);
     });
     toggleBtn.textContent = on ? 'Avslutt' : 'Rediger';

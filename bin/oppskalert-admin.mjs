@@ -2,6 +2,7 @@
 import { writeFileSync, readFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
 import { join, extname, sep } from 'node:path';
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { execFileSync, execFile } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { build } from '../build/index.mjs';
@@ -173,12 +174,35 @@ function dev() {
   const PORT = Number(process.env.PORT) || 8899;
   const PIN = process.env.ADMIN_PIN || '1234';
   build({ rot });
+  // Omtaler fra /tilbakemelding lever bare i minnet her. I produksjon ligger de i Supabase.
+  const omtaler = [];
 
   createServer((req, res) => {
     const svar = (kode, kropp) => {
       res.writeHead(kode, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(kropp));
     };
+
+    if (req.method === 'POST' && req.url === '/api/tilbakemelding') {
+      const biter = [];
+      req.on('data', (c) => biter.push(c));
+      req.on('end', () => {
+        let kropp;
+        try { kropp = JSON.parse(Buffer.concat(biter).toString()); } catch (e) { return svar(400, { ok: false, feil: 'Ugyldig JSON.' }); }
+        if (kropp.pin === undefined) {
+          if (!kropp.navn || !kropp.firma || !kropp.tekst || !kropp.samtykke) return svar(400, { ok: false, feil: 'Navn, bedrift og omtale må fylles ut.' });
+          omtaler.unshift({ id: randomUUID(), navn: kropp.navn, firma: kropp.firma, rolle: kropp.rolle || null, arrangement: kropp.arrangement || null, oppdrag: kropp.oppdrag || null, tekst: kropp.tekst, status: 'ny', opprettet: new Date().toISOString() });
+          return svar(200, { ok: true });
+        }
+        const sjekk = checkPin(req, kropp.pin, PIN);
+        if (!sjekk.ok) return svar(sjekk.status, { ok: false, feil: sjekk.error });
+        if (kropp.handling === 'liste') return svar(200, { ok: true, omtaler: omtaler.filter((o) => o.status === 'ny') });
+        const o = omtaler.find((x) => x.id === kropp.id);
+        if (kropp.handling === 'merk' && o && ['publisert', 'avvist'].includes(kropp.status)) { o.status = kropp.status; return svar(200, { ok: true }); }
+        return svar(400, { ok: false, feil: 'Ukjent handling.' });
+      });
+      return;
+    }
 
     if (req.method === 'POST' && (req.url === '/api/save' || req.url === '/api/verify-pin')) {
       const biter = [];
@@ -192,11 +216,19 @@ function dev() {
         const sjekk = checkPin(req, kropp.pin, PIN);
         if (!sjekk.ok) return svar(sjekk.status, { ok: false, error: sjekk.error });
         if (req.url === '/api/verify-pin') return svar(200, { ok: true });
+        if (kropp.les !== undefined) {
+          const n = trygSidenavn(kropp.les);
+          if (!n || n !== kropp.les) return svar(400, { ok: false, error: 'Ugyldig sidenavn.' });
+          const f = join(rot, 'content', `${n}.json`);
+          return svar(200, { ok: true, innhold: existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {} });
+        }
+        const sider = kropp.sider && typeof kropp.sider === 'object' ? kropp.sider : null;
+        if (sider && Object.keys(sider).some((n) => trygSidenavn(n) !== n)) return svar(400, { ok: false, error: 'Ugyldige sider.' });
         // Samme regler som api/save.js: en samlingsforespoersel trenger verken
         // side eller edits, og selve samlingsarbeidet gjoeres av behandle().
         const { samling } = kropp;
         const harSamling = samling !== undefined && samling !== null;
-        if (!harSamling && (!kropp.page || !kropp.edits)) return svar(400, { ok: false, error: 'Mangler page eller edits' });
+        if (!harSamling && !sider && (!kropp.page || !kropp.edits)) return svar(400, { ok: false, error: 'Mangler page eller edits' });
 
         let samlingSti = null;
         if (harSamling) {
@@ -228,6 +260,13 @@ function dev() {
           const f = join(rot, 'content', `${sidenavn}.json`);
           const naa = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {};
           writeFileSync(f, JSON.stringify({ ...naa, ...kropp.edits }, null, 2));
+        }
+
+        for (const [n, e] of Object.entries(sider || {})) {
+          mkdirSync(join(rot, 'content'), { recursive: true });
+          const f = join(rot, 'content', `${n}.json`);
+          const naa = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {};
+          writeFileSync(f, JSON.stringify({ ...naa, ...e }, null, 2));
         }
 
         if (resultat) {

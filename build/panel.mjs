@@ -13,6 +13,7 @@
 //                                På et data-edit-element: tekstfelt i fanen.
 //   data-panel-etikett="2026"    overskrift for lista eller feltet i panelet.
 //   data-panel-type="dato|lenke|logo|lang"  på et felt i kortet.
+//   data-panel-rekke="1"         rekkefølgen på fanen (laveste tall vinner).
 //   data-panel-omtaler           på en omtaleliste: en godkjent omtale kan
 //                                legges her. Verdien (f.eks. «Konferansier»)
 //                                krysses av når omtalen gjelder det oppdraget.
@@ -60,9 +61,11 @@ export function lesPanel(dom, side) {
     if (iSpeil(liste)) continue;
     const kort = liste.querySelectorAll('[data-list-item]');
     if (!kort.length) continue;
-    const grunn = { side, liste: liste.getAttribute('data-editable-list'), etikett: liste.getAttribute('data-panel-etikett') || '', felt: felterI(kort[0]) };
+    // standard er malens egne kort. Mangler lista i content/<side>.json, er det
+    // dem siden viser, og panelet maa bygge videre paa dem, aldri paa en tom liste.
+    const grunn = { side, liste: liste.getAttribute('data-editable-list'), etikett: liste.getAttribute('data-panel-etikett') || '', felt: felterI(kort[0]), standard: kort.map(verdierI) };
     if (liste.hasAttribute('data-panel')) {
-      funn.lister.push({ fane: liste.getAttribute('data-panel'), ...grunn, standard: kort.map(verdierI) });
+      funn.lister.push({ fane: liste.getAttribute('data-panel'), rekke: Number(liste.getAttribute('data-panel-rekke')) || 99, ...grunn });
     }
     if (liste.hasAttribute('data-panel-omtaler')) {
       funn.omtaler.push({ ...grunn, oppdrag: liste.getAttribute('data-panel-omtaler') || '' });
@@ -70,7 +73,7 @@ export function lesPanel(dom, side) {
   }
   for (const el of dom.querySelectorAll('[data-edit][data-panel]')) {
     if (iSpeil(el)) continue;
-    funn.tekster.push({ fane: el.getAttribute('data-panel'), side, nokkel: el.getAttribute('data-edit'), etikett: el.getAttribute('data-panel-etikett') || stor(el.getAttribute('data-edit')), standard: el.innerHTML.trim() });
+    funn.tekster.push({ fane: el.getAttribute('data-panel'), rekke: Number(el.getAttribute('data-panel-rekke')) || 99, side, nokkel: el.getAttribute('data-edit'), etikett: el.getAttribute('data-panel-etikett') || stor(el.getAttribute('data-edit')), standard: el.innerHTML.trim() });
   }
   return funn;
 }
@@ -79,18 +82,21 @@ export function lesPanel(dom, side) {
 // de først dukker opp.
 export function lagPanel(alle) {
   const faner = [];
-  const fane = (navn) => {
+  const fane = (navn, rekke) => {
     let f = faner.find((x) => x.navn === navn);
-    if (!f) { f = { navn, lister: [], tekster: [] }; faner.push(f); }
+    if (!f) { f = { navn, rekke, lister: [], tekster: [] }; faner.push(f); }
+    f.rekke = Math.min(f.rekke, rekke);
     return f;
   };
   const omtaler = [];
   for (const funn of alle) {
-    for (const l of funn.lister) { const { fane: n, ...rest } = l; fane(n).lister.push(rest); }
-    for (const t of funn.tekster) { const { fane: n, ...rest } = t; fane(n).tekster.push(rest); }
+    for (const l of funn.lister) { const { fane: n, rekke, ...rest } = l; fane(n, rekke).lister.push(rest); }
+    for (const t of funn.tekster) { const { fane: n, rekke, ...rest } = t; fane(n, rekke).tekster.push(rest); }
     omtaler.push(...funn.omtaler);
   }
-  return { faner, omtaler };
+  // data-panel-rekke styrer rekkefoelgen; uten den kommer fanene som de dukker opp.
+  faner.sort((a, b) => a.rekke - b.rekke);
+  return { faner: faner.map(({ rekke, ...f }) => f), omtaler };
 }
 
 export function iDag(d = new Date()) {
