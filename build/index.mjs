@@ -3,6 +3,7 @@
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, cpSync, existsSync, rmSync } from 'node:fs';
 import { join, isAbsolute, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { lesPanel, lagPanel, bakDatoer, DATOSKRIPT } from './panel.mjs';
 import { parse } from 'node-html-parser';
 import { lagOppslag } from './mirror.mjs';
 import { bakeTekst, bakeBilder, bakeLister, settStilProp, settFokuspunkt } from './bake.mjs';
@@ -235,6 +236,7 @@ export function build(config = {}) {
 
   let sider = 0, treff = 0, innlegg = 0;
   const innleggStier = [];
+  const panelFunn = [];
   const etiketter = {};
 
   for (const fil of readdirSync(TPL)) {
@@ -254,6 +256,8 @@ export function build(config = {}) {
     const side = fil.replace(/\.html$/, '');
     const dom = parse(readFileSync(join(TPL, fil), 'utf8'), { comment: true });
     const slaOpp = lagOppslag(lastInnhold(side), lastInnhold);
+    // Panelet trenger malens eget standardinnhold, saa merkene leses foer bakingen.
+    panelFunn.push(lesPanel(dom, side));
 
     treff += bakeTekst(dom, slaOpp);
     treff += bakeBilder(dom, slaOpp);
@@ -267,6 +271,7 @@ export function build(config = {}) {
       }
     }
     treff += bakSamlinger(dom, samlinger);
+    if (bakDatoer(dom) > 0) dom.querySelector('body')?.insertAdjacentHTML('beforeend', DATOSKRIPT);
 
     const head = dom.querySelector('head');
     if (head) head.insertAdjacentHTML('beforeend', PUBLIKUMSSTIL);
@@ -309,6 +314,10 @@ export function build(config = {}) {
       innlegg++;
       innleggStier.push(`/${navn}/${post.slug}/`);
     });
+  }
+  const panel = lagPanel(panelFunn);
+  if (panel.faner.length || panel.omtaler.length) {
+    writeFileSync(join(DIST, 'admin', 'panel.json'), JSON.stringify(panel, null, 2));
   }
   if (Object.keys(skjema).length) {
     writeFileSync(join(DIST, 'admin', 'samlinger.json'), JSON.stringify(skjema, null, 2));

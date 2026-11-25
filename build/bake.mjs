@@ -94,6 +94,20 @@ export function bakeLister(dom, slaOpp) {
         settFokuspunkt(felt, pos);
       }
 
+      // Lenker i kortet (billett, mediesak). Bare http(s), mailto, tel og
+      // stier paa siden: en «javascript:»-lenke skal aldri bakes inn.
+      for (const felt of element.querySelectorAll('[data-list-href]')) {
+        const v = post[felt.getAttribute('data-list-href')];
+        if (v == null) continue;
+        if (v && /^(https?:\/\/|mailto:|tel:|\/(?!\/)|#)/i.test(String(v).trim())) {
+          felt.setAttribute('href', String(v).trim());
+          felt.removeAttribute('hidden');
+        } else {
+          felt.removeAttribute('href');
+          felt.setAttribute('hidden', '');
+        }
+      }
+
       if (post._skjult) {
         const klasser = (element.getAttribute('class') || '').trim();
         element.setAttribute('class', `${klasser}${klasser ? ' ' : ''}is-hidden-item`);

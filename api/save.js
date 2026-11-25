@@ -9,15 +9,37 @@ import { slugErGyldig } from '../build/samling.mjs';
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Metoden er ikke tillatt' });
 
-  const { page, pin, edits, bilder = [], samling } = req.body || {};
+  const { page, pin, edits, bilder = [], samling, sider } = req.body || {};
 
   const sjekk = checkPin(req, pin, process.env.ADMIN_PIN);
   if (!sjekk.ok) return res.status(sjekk.status).json({ ok: false, error: sjekk.error });
 
+  // Kontrollpanelet (editor/panel.js) leser sidens innhold herfra, saa det ser
+  // det kunden lagret sist, ogsaa foer bygget er ferdig: { pin, les: 'side' }.
+  if (req.body?.les !== undefined) {
+    const sidenavn = trygSidenavn(req.body.les);
+    if (!sidenavn || sidenavn !== req.body.les) return res.status(400).json({ ok: false, error: 'Ugyldig sidenavn.' });
+    const { GITHUB_REPO: repo, GITHUB_TOKEN: token, GITHUB_BRANCH: branch = 'main' } = process.env;
+    if (!repo || !token) return res.status(500).json({ ok: false, error: 'Mangler GITHUB_REPO eller GITHUB_TOKEN på serveren.' });
+    try {
+      const innhold = await lesFil({ repo, branch, token, sti: `content/${sidenavn}.json` });
+      return res.status(200).json({ ok: true, innhold: innhold || {} });
+    } catch (e) {
+      return res.status(502).json({ ok: false, error: `Fikk ikke hentet innholdet fra GitHub. Proev igjen om litt. Teknisk: ${String(e.message || e).slice(0, 120)}` });
+    }
+  }
+
   // En samlingsforespoersel fra redigeringssiden (editor/samling.js) har
   // ingen side og ingen edits. Alt annet maa ha begge, som foer.
   const harSamling = samling !== undefined && samling !== null;
-  if (!harSamling && (!page || !edits)) return res.status(400).json({ ok: false, error: 'Mangler page eller edits' });
+  // Kontrollpanelet kan skrive til flere sider i ett commit (f.eks. en omtale
+  // som skal paa forsiden og paa /omtaler): { sider: { side: edits, ... } }.
+  const harSider = sider !== undefined && sider !== null;
+  if (harSider && (typeof sider !== 'object' || Array.isArray(sider) || !Object.keys(sider).length || Object.keys(sider).length > 10
+    || Object.entries(sider).some(([n, e]) => trygSidenavn(n) !== n || !e || typeof e !== 'object' || Array.isArray(e)))) {
+    return res.status(400).json({ ok: false, error: 'Ugyldige sider.' });
+  }
+  if (!harSamling && !harSider && (!page || !edits)) return res.status(400).json({ ok: false, error: 'Mangler page eller edits' });
 
   const repo = process.env.GITHUB_REPO;
   const token = process.env.GITHUB_TOKEN;
@@ -86,7 +108,7 @@ export default async function handler(req, res) {
   // en tredjedel lavere enn det satte, og teksten talte ikke med i det hele tatt.
   const byte = (s) => Math.floor(String(s).length * 3 / 4);
   const stor = bilder.reduce((sum, b) => sum + byte(b.data), 0)
-    + Buffer.byteLength(JSON.stringify(edits || {}))
+    + Buffer.byteLength(JSON.stringify(edits || {})) + Buffer.byteLength(JSON.stringify(sider || {}))
     + (samlingSti ? Buffer.byteLength(JSON.stringify(samling.innlegg || {})) : 0);
   if (stor > MAKS_PAYLOAD) {
     return res.status(413).json({
@@ -111,11 +133,11 @@ export default async function handler(req, res) {
   // innlegg alene skal ikke lage en tom content/<navn>.json for en side som
   // ikke finnes.
   const skrivSide = !!page && !!edits && (!harSamling || Object.keys(edits).length > 0);
-  let innholdSti = null;
+  const oppdateringer = harSider ? Object.entries(sider).map(([n, e]) => ({ sti: `content/${n}.json`, edits: e })) : [];
   if (skrivSide) {
     const sidenavn = trygSidenavn(page);
     if (!sidenavn) return res.status(400).json({ ok: false, error: 'Ugyldig sidenavn.' });
-    innholdSti = `content/${sidenavn}.json`;
+    oppdateringer.push({ sti: `content/${sidenavn}.json`, edits });
   }
 
   try {
@@ -124,11 +146,11 @@ export default async function handler(req, res) {
     // ville slettet alt klienten ikke rorte i denne runden. De to filene er
     // uavhengige GitHub-kall, saa de leses parallelt: sekvensielt kostet hver
     // samlings-publisering en dobbel tur-retur til GitHub.
-    const [naaRaw, naaSamling] = await Promise.all([
-      innholdSti ? lesFil({ repo, branch, token, sti: innholdSti }) : Promise.resolve(null),
-      samlingSti ? lesFil({ repo, branch, token, sti: samlingSti }) : Promise.resolve(null)
+    const [naaSamling, ...naaSider] = await Promise.all([
+      samlingSti ? lesFil({ repo, branch, token, sti: samlingSti }) : Promise.resolve(null),
+      ...oppdateringer.map((o) => lesFil({ repo, branch, token, sti: o.sti }))
     ]);
-    if (innholdSti) filer.push({ sti: innholdSti, innhold: JSON.stringify({ ...(naaRaw || {}), ...edits }, null, 2) });
+    oppdateringer.forEach((o, i) => filer.push({ sti: o.sti, innhold: JSON.stringify({ ...(naaSider[i] || {}), ...o.edits }, null, 2) }));
     let resultat = null;
 
     if (samlingSti) {
@@ -154,7 +176,7 @@ export default async function handler(req, res) {
       repo, branch, token,
       melding: resultat
         ? `${samling.navn}: ${HANDLING[samling.handling || 'ny']} ${resultat.slug}${bilder.length ? ` og ${bilder.length} bilde(r)` : ''} (admin)`
-        : `Innhold: ${page}${bilder.length ? ` og ${bilder.length} bilde(r)` : ''} (admin)`,
+        : `Innhold: ${harSider ? Object.keys(sider).join(', ') : page}${bilder.length ? ` og ${bilder.length} bilde(r)` : ''} (admin)`,
       filer
     });
     return res.status(200).json({

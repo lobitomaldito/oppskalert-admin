@@ -20,6 +20,7 @@
 //   IG_BRUKER, CRON_SECRET                   prosjektet
 //   IG_REDIRECT_URI                          valgfri, ellers https://<host>/api/instagram
 import { commitFiler, lesFil } from './_git.mjs';
+import { supabase } from './_supabase.mjs';
 
 const ANTALL = 18;
 const FB = 'https://graph.facebook.com/v27.0';
@@ -38,22 +39,18 @@ async function json(r) {
 }
 
 // ---------- Nøkkellager: Supabase-tabellen instagram_tilkoblinger, én rad per
-// Instagram-konto. Tabellen har RLS uten policyer, så bare service-nøkkelen
-// slipper inn. Bare apikey: de nye sb_secret_-nøklene er ikke JWT.
-
-const sb = () => ({ apikey: env('SUPABASE_SERVICE_ROLE_KEY') });
+// Instagram-konto.
 
 async function lesNokkel(bruker) {
-  const r = await fetch(`${env('SUPABASE_URL')}/rest/v1/instagram_tilkoblinger?side=eq.${encodeURIComponent(bruker)}&select=token,ig_id`, { headers: sb() });
-  return (await json(r))[0] || null;
+  return (await supabase(`instagram_tilkoblinger?side=eq.${encodeURIComponent(bruker)}&select=token,ig_id`))[0] || null;
 }
 
 async function lagreNokkel(bruker, token, igId) {
-  await json(await fetch(`${env('SUPABASE_URL')}/rest/v1/instagram_tilkoblinger`, {
+  await supabase('instagram_tilkoblinger', {
     method: 'POST',
-    headers: { ...sb(), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+    headers: { Prefer: 'resolution=merge-duplicates' },
     body: JSON.stringify({ side: bruker, token, ig_id: igId, fornyet: new Date().toISOString() })
-  }));
+  });
 }
 
 // ---------- Meta
