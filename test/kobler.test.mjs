@@ -213,3 +213,20 @@ test('en feilende env add stopper flyten og sier hvilken', async () => {
   });
   await assert.rejects(() => kobler(io), /GITHUB_REPO/);
 });
+
+test('token-skjemaet aapnes ferdig utfylt for repoet', async () => {
+  const io = lagIo();
+  await kobler(io);
+  const u = new URL(io.aapnet[0]);
+  assert.equal(u.origin + u.pathname, 'https://github.com/settings/personal-access-tokens/new');
+  assert.equal(u.searchParams.get('name'), 'admin-kundeside');
+  assert.equal(u.searchParams.get('target_name'), 'eier');
+  assert.equal(u.searchParams.get('contents'), 'write');
+  assert.equal(u.searchParams.get('expires_in'), 'none');
+});
+
+test('token-navnet kuttes til 40 tegn', async () => {
+  const { lagTokenUrl } = await import('../bin/_kobler.mjs');
+  const u = new URL(lagTokenUrl('eier/' + 'x'.repeat(60)));
+  assert.equal(u.searchParams.get('name').length, 40);
+});
