@@ -3,23 +3,19 @@
 // lager ren statisk HTML som før.
 //
 // Tre veier inn i samme funksjon:
-//  ?koble     Sender kunden til Instagram-innloggingen (Instagram API with
-//             Instagram Login, bare instagram_business_basic). Kunden logger inn
-//             med Instagram og trenger ingen Facebook-side, men kontoen må være
-//             en bedrifts- eller skaperkonto. Dette er lenken i mailen.
-//  ?code=...  Kunden har godkjent. Koden byttes i en nøkkel som varer 60 dager,
-//             kontoen slås opp, og første henting kjøres. Logger noen inn med en
-//             annen konto enn IG_BRUKER, vises en testside og ingenting lagres.
-//  cron       Vercel kaller daglig med CRON_SECRET, fornyer nøkkelen når den er
-//             over en uke gammel og henter nye innlegg.
+//  ?koble     Sender kunden til innloggingen hos Meta. Dette er lenken i mailen.
+//  ?code=...  Kunden har godkjent. Koden byttes i en nøkkel (Facebook Login for
+//             Business, «System-user access token» som ikke går ut), kontoen slås
+//             opp, og første henting kjøres. Logger noen inn med en annen konto
+//             enn IG_BRUKER, vises en testside og ingenting lagres.
+//  cron       Vercel kaller daglig med CRON_SECRET og henter nye innlegg.
 //
 // Skriver til content/index.json: lista «insta» ({ bilde, tittel }) og tekstene
 // ig_innlegg og ig_folgere. Endrer kunden dem i admin, varer det til neste natt.
 // Bildene havner i static/assets/img/insta/ig-<id>.<ext>.
 //
 // Miljøvariabler (se README, «Instagram på forsiden»):
-//   IG_APP_ID, IG_APP_SECRET                 delt i Vercel-teamet (Instagram-app-ID
-//                                            og -hemmelighet, ikke Facebook-appens)
+//   IG_APP_ID, IG_CONFIG_ID, IG_APP_SECRET   delt i Vercel-teamet
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  delt i Vercel-teamet
 //   IG_BRUKER, CRON_SECRET                   prosjektet
 //   IG_REDIRECT_URI                          valgfri, ellers https://<host>/api/instagram
@@ -27,9 +23,7 @@ import { commitFiler, lesFil } from './_git.mjs';
 import { supabase } from './_supabase.mjs';
 
 const ANTALL = 18;
-const IG = 'https://graph.instagram.com';
-const VERSJON = 'v27.0';
-const UKE = 7 * 24 * 3600 * 1000;
+const FB = 'https://graph.facebook.com/v27.0';
 const INNHOLD = 'content/index.json';
 
 const env = (k) => {
@@ -48,7 +42,7 @@ async function json(r) {
 // Instagram-konto.
 
 async function lesNokkel(bruker) {
-  return (await supabase(`instagram_tilkoblinger?side=eq.${encodeURIComponent(bruker)}&select=token,ig_id,fornyet`))[0] || null;
+  return (await supabase(`instagram_tilkoblinger?side=eq.${encodeURIComponent(bruker)}&select=token,ig_id`))[0] || null;
 }
 
 async function lagreNokkel(bruker, token, igId) {
@@ -59,39 +53,25 @@ async function lagreNokkel(bruker, token, igId) {
   });
 }
 
-// ---------- Instagram
+// ---------- Meta
 
-const ig = async (sti, token) => json(await fetch(`${IG}/${VERSJON}/${sti}${sti.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`));
+const fb = async (sti, token) => json(await fetch(`${FB}/${sti}${sti.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`));
 
 const tilbake = (req) => process.env.IG_REDIRECT_URI || `https://${req.headers.host}/api/instagram`;
 
 export function innloggingsUrl(redirect) {
   const q = new URLSearchParams({
-    client_id: env('IG_APP_ID'), redirect_uri: redirect, response_type: 'code',
-    scope: 'instagram_business_basic', force_reauth: 'true'
+    client_id: env('IG_APP_ID'), config_id: env('IG_CONFIG_ID'), redirect_uri: redirect,
+    response_type: 'code', override_default_response_type: 'true', prompt: 'login'
   });
-  return `https://www.instagram.com/oauth/authorize?${q}`;
+  return `https://www.facebook.com/dialog/oauth?${q}`;
 }
 
-// Kort nøkkel (1 time) byttes straks i en lang (60 dager). Svaret på det første
-// byttet har kommet både flatt og pakket i data[], så begge godtas.
 async function byttKode(code, redirect) {
-  const kropp = new URLSearchParams({
-    client_id: env('IG_APP_ID'), client_secret: env('IG_APP_SECRET'),
-    grant_type: 'authorization_code', redirect_uri: redirect, code: code.replace(/#_$/, '')
-  });
-  const svar = await json(await fetch('https://api.instagram.com/oauth/access_token', { method: 'POST', body: kropp }));
-  const kort = (svar.data ? svar.data[0] : svar).access_token;
-  const q = new URLSearchParams({ grant_type: 'ig_exchange_token', client_secret: env('IG_APP_SECRET'), access_token: kort });
-  const { access_token: token } = await json(await fetch(`${IG}/access_token?${q}`));
-  const konto = await ig('me?fields=user_id,username', token);
-  return { token, konto: { id: String(konto.user_id || konto.id), username: konto.username } };
-}
-
-// Lang nøkkel som er minst ett døgn gammel kan fornyes til nye 60 dager.
-async function fornyNokkel(token) {
-  const q = new URLSearchParams({ grant_type: 'ig_refresh_token', access_token: token });
-  return (await json(await fetch(`${IG}/refresh_access_token?${q}`))).access_token;
+  const q = new URLSearchParams({ client_id: env('IG_APP_ID'), client_secret: env('IG_APP_SECRET'), redirect_uri: redirect, code });
+  const { access_token: token } = await json(await fetch(`${FB}/oauth/access_token?${q}`));
+  const { data = [] } = await fb('me/assigned_instagram_accounts?fields=id,username', token);
+  return { token, kontoer: data };
 }
 
 // ---------- Tekst
@@ -112,8 +92,8 @@ const ENDELSE = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' 
 // ---------- Henting
 
 export async function synk(token, igId) {
-  const meg = await ig('me?fields=username,media_count,followers_count', token);
-  const { data = [] } = await ig(`me/media?fields=id,caption,media_type,media_url,thumbnail_url&limit=${ANTALL + 6}`, token);
+  const meg = await fb(`${igId}?fields=username,media_count,followers_count`, token);
+  const { data = [] } = await fb(`${igId}/media?fields=id,caption,media_type,media_url,thumbnail_url&limit=${ANTALL + 6}`, token);
 
   const git = { repo: env('GITHUB_REPO'), token: env('GITHUB_TOKEN'), branch: process.env.GITHUB_BRANCH || 'main' };
   // lesFil kaster på alt annet enn 404. Behandlet som tomt ville commiten
@@ -169,11 +149,13 @@ export default async function handler(req, res) {
   if (q.code) {
     try {
       const bruker = env('IG_BRUKER');
-      const { token, konto } = await byttKode(String(q.code), tilbake(req));
-      if (konto.username !== bruker) {
-        const prove = await ig('me/media?fields=caption&limit=5', token);
+      const { token, kontoer } = await byttKode(String(q.code), tilbake(req));
+      const konto = kontoer.find((k) => k.username === bruker);
+      if (!konto) {
+        const navn = kontoer.map((k) => `@${k.username}`).join(', ') || 'ingen Instagram-konto';
+        const prove = kontoer[0] ? await fb(`${kontoer[0].id}/media?fields=caption&limit=5`, token) : { data: [] };
         const medTekst = prove.data.filter((m) => m.caption).length;
-        return html(200, 'Innloggingen virker', `Koblet til @${konto.username}, ikke @${bruker}, så ingenting er lagret. Test: ${prove.data.length} innlegg lest, ${medTekst} med bildetekst.`);
+        return html(200, 'Innloggingen virker', `Koblet til ${navn}, ikke @${bruker}, så ingenting er lagret. Test: ${prove.data.length} innlegg lest, ${medTekst} med bildetekst.`);
       }
       await lagreNokkel(bruker, token, konto.id);
       await synk(token, konto.id);
@@ -189,15 +171,7 @@ export default async function handler(req, res) {
   try {
     const rad = await lesNokkel(env('IG_BRUKER'));
     if (!rad) return res.status(200).json({ ok: false, grunn: 'Instagram er ikke koblet til ennå' });
-    let token = rad.token;
-    if (!rad.fornyet || Date.now() - Date.parse(rad.fornyet) > UKE) {
-      // Feiler fornyelsen, brukes den gamle nøkkelen, og neste natt prøver igjen.
-      try {
-        token = await fornyNokkel(token);
-        await lagreNokkel(env('IG_BRUKER'), token, rad.ig_id);
-      } catch (e) { console.error('Instagram-nøkkelen ble ikke fornyet:', e.message); }
-    }
-    return res.status(200).json(await synk(token, rad.ig_id));
+    return res.status(200).json(await synk(rad.token, rad.ig_id));
   } catch (e) {
     console.error('Instagram-henting feilet:', e.message);
     return res.status(500).json({ ok: false, feil: e.message.slice(0, 200) });
