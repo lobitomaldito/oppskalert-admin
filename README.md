@@ -735,8 +735,7 @@ export { default } from 'oppskalert-admin/api/instagram.js';
 
 | Variabel | Hvor | Beskrivelse |
 |---|---|---|
-| `IG_APP_ID`, `IG_CONFIG_ID` | delt i Vercel-teamet | Meta-appen «Oppskalert nettsider» og innloggingsoppsettet «Nettside Instagram» (bare `instagram_basic`). |
-| `IG_APP_SECRET` | delt i Vercel-teamet | App-hemmeligheten fra Meta. |
+| `IG_APP_ID`, `IG_APP_SECRET` | delt i Vercel-teamet | **Instagram**-app-ID og -hemmelighet fra Meta-appen (Instagram → API setup with Instagram login), ikke Facebook-appens. Bare `instagram_business_basic`. |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | delt i Vercel-teamet | Supabase `oppskalert`, tabellen `instagram_tilkoblinger`. Secret-nøkkelen (`sb_secret_…`). |
 | `IG_BRUKER` | prosjektet | Kundens Instagram-brukernavn, uten @. Bare den kontoen kan fylle siden. |
 | `CRON_SECRET` | prosjektet | `openssl rand -hex 32 \| vercel env add CRON_SECRET production`. Uten den avvises cron. |
@@ -744,19 +743,25 @@ export { default } from 'oppskalert-admin/api/instagram.js';
 
 ### Ny kunde (ca. 10 minutter)
 
+Kunden logger inn med Instagram og trenger ingen Facebook-side. Kontoen må være
+en bedrifts- eller skaperkonto (Instagram → Innstillinger → Kontotype).
+
 1. Legg `https://<domenet>/api/instagram` til som redirect URL i Meta-appen
-   (Instagram API, «API setup with Unified login»). Gjenta når siden flytter
-   til kundens eget domene.
-2. Inviter kundens brukernavn som **Instagram Tester** under App roles → Roller.
-   Appen er i utviklingsmodus: maks 50 testere, og bare de med rolle kan logge inn.
-3. Koble de fem delte variablene til prosjektet (Vercel → Team Settings →
+   (Instagram → API setup with Instagram login → Business login settings).
+   Gjenta når siden flytter til kundens eget domene.
+2. Til appen er godkjent av Meta (Advanced Access): inviter kundens brukernavn
+   som **Instagram Tester** under App roles → Roller. Kunden godtar på
+   https://www.instagram.com/accounts/manage_access/ (fanen «Testerinvitasjoner»,
+   bare i nettleseren). Etter godkjenningen trengs ikke dette steget.
+3. Koble de fire delte variablene til prosjektet (Vercel → Team Settings →
    Environment Variables → hver av dem → legg til prosjektet), og sett
    `IG_BRUKER` og `CRON_SECRET` i prosjektet. Så et nytt bygg.
 4. Test selv: åpne `/api/instagram?koble` og logg inn med Oppskalert sin
    Instagram. Siden «Innloggingen virker» viser hva den fant, og ingenting lagres.
-5. Send kunden: godta invitasjonen på
-   https://www.instagram.com/accounts/manage_access/ (fanen «Testerinvitasjoner»,
-   bare i nettleseren), og klikk `https://<domenet>/api/instagram?koble`.
+5. Send kunden lenken `https://<domenet>/api/instagram?koble`.
+
+Nøkkelen varer 60 dager. Cron fornyer den når den er over en uke gammel, så den
+går ikke ut så lenge siden kjører hver natt.
 
 ### Markup
 

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import instagram, { synk, tall, altTekst, innloggingsUrl } from '../api/instagram.js';
 
 // Falsk Meta, Supabase og GitHub i én fetch. Innholdsfila lever i `lagret`.
-let lagret, commits, supabase;
+let lagret, commits, supabase, fornyet, fornyelser;
 const ekteFetch = globalThis.fetch;
 const svar = (body, type = 'application/json', status = 200) =>
   new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'content-type': type } });
@@ -13,18 +13,25 @@ beforeEach(() => {
   lagret = { ig_bio: 'urørt' };
   commits = 0;
   supabase = [];
+  fornyet = new Date().toISOString();
+  fornyelser = 0;
   Object.assign(process.env, {
-    GITHUB_REPO: 'meg/side', GITHUB_TOKEN: 't', IG_BRUKER: 'kunde', IG_APP_ID: '11', IG_CONFIG_ID: '22',
+    GITHUB_REPO: 'meg/side', GITHUB_TOKEN: 't', IG_BRUKER: 'kunde', IG_APP_ID: '11',
     IG_APP_SECRET: 's', SUPABASE_URL: 'https://sb', SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_x', CRON_SECRET: 'hemmelig'
   });
   delete process.env.GITHUB_BRANCH;
   delete process.env.IG_REDIRECT_URI;
   globalThis.fetch = async (url, init = {}) => {
     url = String(url);
-    if (url.includes('/oauth/access_token')) return svar({ access_token: 'TOK' });
-    if (url.includes('/me/assigned_instagram_accounts')) return svar({ data: [{ id: '17841', username: process.env.TEST_KONTO || 'kunde' }] });
-    if (url.includes('/17841?')) return svar({ username: 'kunde', media_count: 408, followers_count: 34812 });
-    if (url.includes('/17841/media')) return svar({ data: [
+    if (url === 'https://api.instagram.com/oauth/access_token') {
+      assert.equal(init.body.get('code'), 'abc');
+      return svar({ data: [{ access_token: 'KORT', user_id: '17841', permissions: 'instagram_business_basic' }] });
+    }
+    if (url.includes('/access_token?grant_type=ig_exchange_token')) return svar({ access_token: 'TOK', expires_in: 5184000 });
+    if (url.includes('/refresh_access_token?')) { fornyelser++; return svar({ access_token: 'TOK2', expires_in: 5184000 }); }
+    if (url.includes('/me?fields=user_id,username')) return svar({ user_id: '17841', username: process.env.TEST_KONTO || 'kunde' });
+    if (url.includes('/me?fields=username,media_count')) return svar({ username: 'kunde', media_count: 408, followers_count: 34812 });
+    if (url.includes('/me/media')) return svar({ data: [
       { id: '1', media_type: 'IMAGE', media_url: 'https://cdn/1', caption: 'Kveld på Latter #standup\nlinje to' },
       { id: '2', media_type: 'VIDEO', thumbnail_url: 'https://cdn/2' },
       { id: '3', media_type: 'CAROUSEL_ALBUM', media_url: 'https://cdn/3v' }
@@ -33,7 +40,7 @@ beforeEach(() => {
     if (url.startsWith('https://cdn/')) return svar('jpeg', 'image/jpeg');
     if (url.startsWith('https://sb/')) {
       supabase.push({ url, metode: init.method || 'GET', kropp: init.body && JSON.parse(init.body), hoder: init.headers });
-      return svar(init.method === 'POST' ? '' : [{ token: 'TOK', ig_id: '17841' }], 'application/json', init.method === 'POST' ? 201 : 200);
+      return svar(init.method === 'POST' ? '' : [{ token: 'TOK', ig_id: '17841', fornyet }], 'application/json', init.method === 'POST' ? 201 : 200);
     }
     if (url.includes('/contents/content/index.json')) return svar({ content: Buffer.from(JSON.stringify(lagret)).toString('base64') });
     if (url.endsWith('git/trees')) {
@@ -81,12 +88,14 @@ test('ingen commit når ingenting er nytt', async () => {
   assert.equal(commits, 1);
 });
 
-test('?koble sender til Meta med tilbake-adresse fra host', async () => {
+test('?koble sender til Instagram-innloggingen med tilbake-adresse fra host', async () => {
   const res = lagRes();
   await instagram(lagReq({ koble: '' }), res);
   assert.equal(res.kode, 302);
   const u = new URL(res.til);
-  assert.equal(u.searchParams.get('config_id'), '22');
+  assert.equal(u.origin + u.pathname, 'https://www.instagram.com/oauth/authorize');
+  assert.equal(u.searchParams.get('scope'), 'instagram_business_basic');
+  assert.equal(u.searchParams.get('client_id'), '11');
   assert.equal(u.searchParams.get('redirect_uri'), 'https://kundedemo.oppskalert.no/api/instagram');
   process.env.IG_REDIRECT_URI = 'https://kunde.no/api/instagram';
   assert.match(innloggingsUrl(process.env.IG_REDIRECT_URI), /redirect_uri=https%3A%2F%2Fkunde\.no/);
@@ -121,6 +130,16 @@ test('cron uten riktig nøkkel avvises, med riktig nøkkel hentes det', async ()
   await instagram(lagReq({}, { authorization: 'Bearer hemmelig' }), ok);
   assert.equal(ok.kode, 200);
   assert.equal(ok.kropp.nye, 2);
+  assert.equal(fornyelser, 0);
+});
+
+test('cron fornyer nøkkelen når den er over en uke gammel', async () => {
+  fornyet = new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString();
+  const res = lagRes();
+  await instagram(lagReq({}, { authorization: 'Bearer hemmelig' }), res);
+  assert.equal(res.kode, 200);
+  assert.equal(fornyelser, 1);
+  assert.equal(supabase.find((k) => k.metode === 'POST').kropp.token, 'TOK2');
 });
 
 test('tall og alt-tekst', () => {
