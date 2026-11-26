@@ -1,19 +1,21 @@
 # Meta-godkjenning av Instagram-henteren
 
 Mål: at alle kunder kan koble Instagram til nettsiden sin med ett klikk, uten
-testerlister. Det krever **Advanced Access** på `instagram_business_basic`, og
-det krever bedriftsverifisering og App Review hos Meta.
+testerlister. Det krever **Advanced Access** på `instagram_basic`, og det
+krever bedriftsverifisering og App Review hos Meta.
 
-Henteren bruker Instagram-innloggingen fra v1.9.0 (se README, «Instagram på
-forsiden»). Kunden trenger ingen Facebook-side, bare en bedrifts- eller
-skaperkonto på Instagram.
+Appen bruker «API setup with Unified login» med oppsettet «Nettside Instagram»
+(Instagram Login Compatible, nøkkel som ikke går ut, bare `instagram_basic`).
+Kunden kan logge inn med Instagram. Den rene Instagram-innloggingen
+(`instagram_business_basic`) er ikke tilgjengelig for nyere apper, så v1.9.0,
+som prøvde den, ble trukket tilbake i v1.9.1.
 
 ## Rekkefølge
 
 | # | Steg | Hvem | Tid |
 |---|---|---|---|
 | 1 | Bedriftsverifisering av porteføljen «Oppskalert» | Aleksander | 15 min + Metas behandling (dager) |
-| 2 | Instagram-innlogging i Meta-appen, nye nøkler i Vercel | Aleksander eller Claude i Chrome | 20 min |
+| 2 | Redirect-adresse for hver kundeside (finnes for Cécile) | Aleksander eller Claude i Chrome | 2 min per side |
 | 3 | Test med @oppskalert på en kundeside | Aleksander | 5 min |
 | 4 | Instagram-avsnitt på oppskalert.no/personvern + sletteside | Claude | 30 min |
 | 5 | Appinnstillinger: ikon, kategori, personvern- og slettelenke | Aleksander eller Claude i Chrome | 10 min |
@@ -35,28 +37,19 @@ Business Settings → Security Center → Start verification.
 - Domenet oppskalert.no kan bekreftes med DNS-post eller metatag, som Meta viser.
 - Telefon og adresse må være de samme som i dokumentet.
 
-## 2. Instagram-innlogging i Meta-appen
+## 2. Redirect-adresser
 
-developers.facebook.com → appen «Oppskalert nettsider» (ID 1895893015108979).
+Use cases → Instagram API → Customize → API setup with Unified login →
+Redirect URL: registrer `https://<domenet>/api/instagram` for hver kundeside.
+`https://cecilemoronidemo.oppskalert.no/api/instagram` er registrert.
 
-1. Use cases → legg til / åpne Instagram → **API setup with Instagram login**.
-   Meta sier at én app ikke kan bruke både Facebook-innlogging og
-   Instagram-innlogging. Krever dashbordet at Facebook Login for Business
-   fjernes, gjør det, eller lag en ny app av typen Business med navnet
-   «Oppskalert nettsider».
-2. Kopier **Instagram app ID** og **Instagram app secret** (ikke Facebook-appens).
-3. Vercel → Team Settings → Environment Variables: sett `IG_APP_ID` og
-   `IG_APP_SECRET` til de nye verdiene. Slett `IG_CONFIG_ID`.
-4. Business login settings → OAuth redirect URIs: legg inn
-   `https://<domenet>/api/instagram` for hver kundeside (nå:
-   `https://cecilemoronidemo.oppskalert.no/api/instagram`).
-5. App roles → Roles → Instagram Testers: legg til `oppskalert`, og godta på
-   https://www.instagram.com/accounts/manage_access/.
+Til appen er godkjent: kunden må være **Instagram Tester** (App roles → Roller)
+og godta invitasjonen på https://www.instagram.com/accounts/manage_access/.
+Cécile står som «Pending» per 26.11.2026.
 
 ## 3. Test
 
-Oppgrader kundesiden til `oppskalert-admin#v1.9.0`, bygg, åpne
-`/api/instagram?koble` og logg inn som @oppskalert. Siden skal vise
+Åpne `https://<kundeside>/api/instagram?koble` og logg inn som @oppskalert. Siden skal vise
 «Innloggingen virker» med antall innlegg lest. Ingenting lagres. Dette er også
 det ene vellykkede API-kallet Meta krever før innsending.
 
@@ -108,9 +101,9 @@ korte tekstskilt (Meta ber om det). Bruk @oppskalert.
    connecting Instagram».
 2. Åpne `https://<kundeside>/api/instagram?koble`. Skilt: «The client clicks
    the connect link we send them».
-3. Instagram-innloggingen: logg inn og vis tillatelsessiden med
-   `instagram_business_basic`. Trykk Allow. Skilt: «The client grants
-   instagram_business_basic».
+3. Meta-innloggingen: velg å logge inn med Instagram, vis tillatelsessiden med
+   `instagram_basic` og trykk Allow. Skilt: «The client logs in with Instagram
+   and grants instagram_basic».
 4. Siden «Innloggingen virker» med brukernavnet og antall innlegg. Skilt:
    «The app reads the username, user ID and latest posts».
 5. Vis kundesiden med Instagram-rutenettet fylt. Skilt: «The client's own posts
@@ -118,11 +111,11 @@ korte tekstskilt (Meta ber om det). Bruk @oppskalert.
 
 ## 7. App Review: tekster
 
-**Use case for `instagram_business_basic`**
+**Use case for `instagram_basic`**
 
 > Oppskalert builds and hosts websites for small businesses in Norway. Each
 > client can connect their own Instagram professional account to their own
-> website. We use instagram_business_basic to read the connected account's
+> website. We use instagram_basic to read the connected account's
 > username, user ID, follower count, media count and the media URL and caption
 > of its latest posts. Once a night a server job downloads the latest 18 images
 > and publishes them in an Instagram section on the client's website, together
