@@ -86,3 +86,39 @@ test('Enter i et avsnitt eller en overskrift gir linjeskift, ikke <div>', () => 
   assert.match(js, /normalizeHtml\(cleanFieldHtml\(el\)\.trim\(\), el\)/);
   assert.match(js, /execCommand\('insertLineBreak'\)/);
 });
+
+// Cécile Moroni 27.11.2026: tjenestekortene paa forsiden er lenker. Under
+// redigering navigerte et trykk paa teksten eller paa overlegget over bildet
+// bort fra siden, og det som ikke var publisert forsvant.
+test('et trykk i en lenke rundt et listeelement navigerer aldri under redigering', async () => {
+  const { parse } = await import('node-html-parser');
+  const lenkeTrykk = funksjon('lenkeTrykk');
+  const dom = parse(`
+    <ul data-editable-list="kort">
+      <li data-list-item><a class="kort" href="/stand-up"><img data-list-image-field="bilde"><span data-list-field="tittel">Stand-up</span><i class="overlegg"></i></a></li>
+    </ul>
+    <a id="rundt" href="/x"><div data-list-item><img data-list-image-field="b"><b data-list-field="t">T</b></div></a>
+    <div data-list-item><a id="les" href="/y">Les mer</a></div>
+    <a id="knapp" href="/z"><span data-edit="cta">Bestill</span></a>
+    <a id="vanlig" href="/w">Vanlig lenke</a>`);
+  const lister = dom.querySelectorAll('[data-editable-list]');
+  const kort = dom.querySelector('a.kort');
+  // Bli paa siden uten bildemeny. Svaret kommer fra en annen vm-kontekst, derfor ikke deepEqual.
+  const blir = (t) => { const s = lenkeTrykk(t, lister); assert.ok(s); assert.equal(s.bilde, null); };
+
+  // Overlegget (eller selve lenken, som er maalet naar a::after tar klikket): bildemenyen.
+  assert.equal(lenkeTrykk(dom.querySelector('.overlegg'), lister).bilde, kort.querySelector('img'));
+  assert.equal(lenkeTrykk(kort, lister).bilde, kort.querySelector('img'));
+  assert.equal(lenkeTrykk(kort.querySelector('img'), lister).bilde, kort.querySelector('img'));
+  // Teksten: bli paa siden, ingen bildemeny, saa markoeren havner i teksten.
+  blir(kort.querySelector('span'));
+  // En lenke rundt et element utenfor en aktiv liste: bli, men ingen meny.
+  blir(dom.querySelector('#rundt img'));
+  // Lenke inne i et element uten bilde, og tekstfelt i en knapp: bli paa siden.
+  blir(dom.querySelector('#les'));
+  blir(dom.querySelector('#knapp span'));
+  // En vanlig lenke rores ikke.
+  assert.equal(lenkeTrykk(dom.querySelector('#vanlig'), lister), null);
+  // Klikkvakten bruker svaret og stopper navigasjonen.
+  assert.match(js, /var lt = e\.target\.closest && lenkeTrykk\(e\.target, listContainers\);\s*if \(lt\) \{\s*e\.preventDefault\(\);/);
+});

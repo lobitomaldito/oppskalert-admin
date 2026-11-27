@@ -107,10 +107,18 @@ Et prosjekt får en rettelse først når avhengigheten peker på den nye taggen.
 Bytt taggen og installer på nytt, kjør så `doctor` og bygget:
 
 ```bash
-npm i "github:lobitomaldito/oppskalert-admin#v1.5.8"
+npm i "github:lobitomaldito/oppskalert-admin#v1.9.2"
 npx oppskalert-admin doctor .
 node build.mjs
 ```
+
+**v1.9.2:** under redigering navigerer et trykk aldri bort fra et listeelement
+som ligger i en lenke (kort som lenker til en underside), heller ikke fra et
+tekstfelt i en knapp. Teksten får markøren, resten av kortet åpner bildemenyen,
+også når et overlegg (`a::after`) ligger over bildet. Utenfor redigering virker
+lenkene som før. Kom fra Cécile Moroni 27.11.2026. Har et prosjekt et eget
+påplaster for dette i `main.js` (`preventDefault` på kortlenker i
+`adm-editing`), kan det fjernes etter oppgraderingen.
 
 **v1.8.0:** kontrollpanel på `/admin/panel`, med egen knapp i admin-baren:
 omtaler fra kundene, show med dato, logoer i fast format, media og nøkkeltall.

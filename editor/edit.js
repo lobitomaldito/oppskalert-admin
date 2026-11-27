@@ -460,7 +460,11 @@
     if (on) {
       if (!hit.__admImg) {
         hit.__admImg = function (e) {
-          e.preventDefault(); e.stopPropagation();
+          e.preventDefault();
+          // Tekst i samme lenke som bildet skal faa markoeren, ikke bildemenyen.
+          var felt = e.target.closest('[data-edit]');
+          if (felt && hit.contains(felt) && !felt.contains(el)) return;
+          e.stopPropagation();
           if (posEl === el) return;          // being repositioned, taps belong to the drag
           openImgMenu(el, { del: false });
         };
@@ -765,6 +769,26 @@
   // surrounding HTML, so nothing extra is needed there.
   var posEl = null, posBar = null, posDrag = null, posStart = '';
 
+  // Et trykk i en lenke under redigering. Et listeelement kan ligge i en lenke
+  // eller ha en lenke rundt innholdet (kort som lenker til en underside), og et
+  // tekstfelt kan sitte i en knapp. Da skal trykket aldri navigere, ellers
+  // forsvinner det som ikke er publisert. Tekst faar markoeren, resten av kortet
+  // aapner bildemenyen, ogsaa naar et overlegg (a::after) ligger over bildet.
+  // Kom fra Cécile Moroni 27.11.2026. Gir null for en vanlig lenke, ellers
+  // { bilde }: bildefeltet menyen skal aapnes for, eller null for bare aa bli.
+  function lenkeTrykk(t, lister) {
+    var lenke = t.closest('a');
+    if (!lenke) return null;
+    var item = t.closest('[data-list-item]') || lenke.querySelector('[data-list-item]');
+    if (!item && !lenke.querySelector('[data-edit], [data-list-field], [data-list-image-field], [data-edit-image]')) return null;
+    var bilde = null;
+    if (item && lister.indexOf(item.closest('[data-editable-list]')) !== -1 && !t.closest('[data-list-field], .adm-list__ctrl')) {
+      bilde = t.closest('[data-list-image-field]') ||
+        (item.closest('a') === lenke ? item : lenke).querySelector('[data-list-image-field]');
+    }
+    return { bilde: bilde };
+  }
+
   // Et bilde i en samling (kortene for arrangementer, blogginnlegg, varer) eies
   // av innlegget, ikke av denne siden, og Publiser roerer det ikke. Utsnittet
   // lagres derfor rett i innlegget naar posisjoneringen avsluttes, med
@@ -1049,6 +1073,15 @@
     // Et kort i en samling lenker til innleggets egen side. Under redigering
     // skal et trykk der ikke navigere bort fra endringer som ikke er publisert.
     if (e.target.closest && e.target.closest('[data-samling-lenke]')) e.preventDefault();
+    var lt = e.target.closest && lenkeTrykk(e.target, listContainers);
+    if (lt) {
+      e.preventDefault();
+      if (lt.bilde) {
+        e.stopPropagation();
+        if (posEl !== lt.bilde) openImgMenu(lt.bilde, { del: false });
+        return;
+      }
+    }
     var img = e.target;
     // The photo at the top of an open "Les mer" modal. Repositioning is the only
     // thing that makes sense on it (swapping/deleting belong to the card), so skip
